@@ -97,6 +97,10 @@ class AudioTranscriber:
                 f"Successfully transcribed audio: {len(result.get('words', []))} words detected"
             )
 
+            # Add second assignments to words if word-level timestamps are available
+            if "words" in result and result["words"]:
+                result["words"] = self.extract_word_timestamps(result)
+
             # Save transcript if requested
             if save_transcript:
                 from .config.constants import TRANSCRIPTS_PATH
@@ -121,25 +125,37 @@ class AudioTranscriber:
             self.logger.error(f"Transcription failed for {self.audio_file.name}: {e}")
             raise
 
-    def extract_word_timestamps(self, transcript: dict) -> list[dict[str, str | float]]:
+    def extract_word_timestamps(
+        self, transcript: dict
+    ) -> list[dict[str, str | float | int]]:
         """
-        Extract word-level timestamps from transcript.
+        Extract and enhance word-level timestamps with second bucket assignment.
+
+        This method processes the raw OpenAI API response to add 'second' fields
+        for easier frame-to-word synchronization.
 
         Args:
-            transcript: Transcript dictionary from OpenAI API
+            transcript: Raw transcript dictionary from OpenAI API
 
         Returns:
-            List of dictionaries with word, start, and end times
+            List of dictionaries with word, start, end times, and assigned second
         """
         words_with_timestamps = []
 
         if "words" in transcript:
             for word_info in transcript["words"]:
+                start_time = float(word_info.get("start", 0.0))
+                end_time = float(word_info.get("end", 0.0))
+
+                # Simple: assign word to the second where it starts
+                assigned_second = int(start_time)
+
                 words_with_timestamps.append(
                     {
                         "word": word_info.get("word", ""),
-                        "start": word_info.get("start", 0.0),
-                        "end": word_info.get("end", 0.0),
+                        "start": start_time,
+                        "end": end_time,
+                        "second": assigned_second,
                     }
                 )
 
@@ -177,14 +193,14 @@ class AudioTranscriber:
         Get the word/text that was spoken at a specific timestamp.
 
         Args:
-            transcript: Transcript dictionary from OpenAI API
+            transcript: Transcript dictionary with enhanced words (including 'second' field)
             timestamp: Time in seconds to query
             tolerance: Tolerance in seconds for matching
 
         Returns:
             Word spoken at the timestamp, or None if not found
         """
-        words = self.extract_word_timestamps(transcript)
+        words = transcript.get("words", [])
 
         for word_info in words:
             start = float(word_info["start"])
@@ -203,7 +219,7 @@ class AudioTranscriber:
         Synchronize transcript words with frame timestamps.
 
         Args:
-            transcript: Transcript dictionary from OpenAI API
+            transcript: Transcript dictionary with enhanced words (including 'second' field)
             frame_timestamps: List of frame timestamps in seconds
 
         Returns:

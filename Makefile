@@ -39,11 +39,6 @@ install-dev: ## Install project with development dependencies
 	$(UV) sync --group dev
 	@echo "$(GREEN)Development environment ready!$(RESET)"
 
-.PHONY: install-pip
-install-pip: ## Install project with pip (fallback)
-	@echo "$(YELLOW)Installing with pip...$(RESET)"
-	pip install -e ".[dev]"
-
 .PHONY: setup
 setup: install-dev setup-dirs ## Complete development setup
 	@echo "$(GREEN)Development environment setup complete!$(RESET)"
@@ -117,39 +112,6 @@ test-integration: ## Run integration tests only
 run: ## Run the application help
 	@echo "$(GREEN)Running Sniffer CLI...$(RESET)"
 	$(PYTHON) main.py --help
-
-.PHONY: process-sample
-process-sample: ## Process sample video (requires sample.mp4 in current directory)
-	@echo "$(GREEN)Processing sample video...$(RESET)"
-	@if [ -f "sample.mp4" ]; then \
-		$(PYTHON) main.py process sample.mp4 --frames middle --verbose; \
-	else \
-		echo "$(RED)Error: sample.mp4 not found. Place a sample video file in the current directory.$(RESET)"; \
-		exit 1; \
-	fi
-
-.PHONY: info-sample
-info-sample: ## Show info for sample video
-	@echo "$(GREEN)Showing sample video info...$(RESET)"
-	@if [ -f "sample.mp4" ]; then \
-		$(PYTHON) main.py info sample.mp4; \
-	else \
-		echo "$(RED)Error: sample.mp4 not found.$(RESET)"; \
-		exit 1; \
-	fi
-
-.PHONY: demo
-demo: setup-dirs ## Run a complete demo (requires sample.mp4)
-	@echo "$(GREEN)Running Sniffer demo...$(RESET)"
-	@if [ -f "sample.mp4" ]; then \
-		$(PYTHON) main.py info sample.mp4; \
-		echo ""; \
-		$(PYTHON) main.py process sample.mp4 --frames middle --verbose; \
-	else \
-		echo "$(YELLOW)No sample.mp4 found. Creating directories and showing help instead...$(RESET)"; \
-		$(PYTHON) main.py setup; \
-		$(PYTHON) main.py --help; \
-	fi
 
 ##@ Cleanup
 .PHONY: clean

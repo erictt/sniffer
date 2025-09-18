@@ -12,14 +12,12 @@ from typing import Optional
 import typer
 import click
 from rich.console import Console
-from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from .video_processor import VideoProcessor, ProcessResults
-from .transcription import AudioTranscriber
 from .config import VIDEO_PATH, AUDIO_PATH, VIDEO_FRAMES_PATH, TRANSCRIPTS_PATH
 from .utils import setup_default_logging
 from .utils.directory import ensure_directories
+from .cli import ProcessHandler, DisplayManager
 
 app = typer.Typer(
     name="sniffer",
@@ -29,6 +27,8 @@ app = typer.Typer(
 )
 
 console = Console()
+display = DisplayManager()
+process_handler = ProcessHandler()
 
 
 def setup_directories() -> None:
@@ -71,45 +71,7 @@ def get_video_files(input_path: Path) -> list[Path]:
         raise ValueError(f"Invalid path: {input_path}")
 
 
-def show_results_summary(
-    results: list[ProcessResults], transcripts: Optional[dict] = None
-) -> None:
-    """Display a summary of processing results."""
-    table = Table(title="🎯 Processing Results Summary")
-    table.add_column("Operation", style="cyan")
-    table.add_column("Status", style="green")
-    table.add_column("Details", style="yellow")
-
-    # Files processed
-    files_count = len(results)
-    table.add_row("Files Processed", "✅ Complete", f"{files_count} video(s)")
-
-    # Audio extraction
-    audio_count = sum(1 for result in results if result.get("audio_path"))
-    if audio_count > 0:
-        table.add_row("Audio Extraction", "✅ Complete", f"{audio_count} audio file(s)")
-
-    # Frame extraction
-    all_frames_count = sum(len(result.get("all_frames", [])) for result in results)
-    if all_frames_count > 0:
-        table.add_row("All Frames", "✅ Complete", f"{all_frames_count} frames")
-
-    position_frames_count = sum(
-        len(result.get("position_frames", {})) for result in results
-    )
-    if position_frames_count > 0:
-        table.add_row(
-            "Position Frames", "✅ Complete", f"{position_frames_count} frames"
-        )
-
-    # Transcription
-    if transcripts:
-        transcript_count = len(transcripts)
-        table.add_row(
-            "Transcription", "✅ Complete", f"{transcript_count} transcript(s)"
-        )
-
-    console.print(table)
+# Function moved to DisplayManager class
 
 
 @app.command()
@@ -147,7 +109,7 @@ def process(
       [dim]python main.py process video.mp4 --frames middle --transcribe[/dim]
 
     • Batch process folder with audio only:
-      [dim]python main.py process ./videos --no-frames[/dim]
+      [dim]python main.py process ./videos[/dim]
 
     • Extract all frames (warning: large output!):
       [dim]python main.py process video.mp4 --all-frames --no-audio[/dim]
@@ -162,25 +124,17 @@ def process(
 
     # Show processing configuration
     if verbose:
-        config_table = Table(title="🔧 Processing Configuration")
-        config_table.add_column("Setting", style="cyan")
-        config_table.add_column("Value", style="yellow")
-
-        config_table.add_row("Input Path", str(input_path_obj))
-        config_table.add_row("Extract Audio", "✅ Yes" if audio else "❌ No")
-        config_table.add_row("Extract All Frames", "✅ Yes" if all_frames else "❌ No")
-        config_table.add_row("Frame Position", frames or "❌ None")
-        config_table.add_row("Transcribe Audio", "✅ Yes" if transcribe else "❌ No")
-
-        console.print(config_table)
+        display.show_processing_config(
+            input_path_obj, audio, all_frames, frames, transcribe
+        )
 
     try:
+        # Get video files with progress indication
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            # Get video files
             init_task = progress.add_task("🚀 Finding video files...", total=None)
             video_files = get_video_files(input_path_obj)
             progress.update(
@@ -188,72 +142,13 @@ def process(
             )
             progress.remove_task(init_task)
 
-            # Process each video file
-            results = []
-            for i, video_file in enumerate(video_files):
-                process_task = progress.add_task(
-                    f"🎬 Processing video {i + 1}/{len(video_files)}: {video_file.name}...",
-                    total=None,
-                )
-
-                processor = VideoProcessor(video_file)
-                result = processor.process_all(
-                    extract_audio=audio,
-                    extract_all_frames=all_frames,
-                    frame_position=frames,
-                )
-                results.append(result)
-
-                progress.update(
-                    process_task, description=f"✅ Processed {video_file.name}"
-                )
-                progress.remove_task(process_task)
-
-            # Transcribe if requested
-            transcript_results = {}
-            if transcribe and audio:
-                audio_paths = [
-                    result["audio_path"]
-                    for result in results
-                    if result.get("audio_path")
-                ]
-
-                if audio_paths:
-                    for i, audio_path in enumerate(audio_paths):
-                        transcribe_task = progress.add_task(
-                            f"🎙️  Transcribing audio {i + 1}/{len(audio_paths)}: {Path(audio_path).name}...",
-                            total=None,
-                        )
-
-                        try:
-                            transcriber = AudioTranscriber(audio_path)
-                            transcript = transcriber.transcribe()
-                            transcript_results[Path(audio_path).name] = transcript
-
-                            progress.update(
-                                transcribe_task,
-                                description=f"✅ Transcribed {Path(audio_path).name}",
-                            )
-
-                        except Exception as e:
-                            progress.update(
-                                transcribe_task,
-                                description=f"❌ Transcription failed: {Path(audio_path).name}",
-                            )
-                            console.print(
-                                f"⚠️  [yellow]Warning:[/yellow] Transcription failed for {Path(audio_path).name}: {e}"
-                            )
-                            console.print(
-                                "💡 [dim]Make sure OPENAI_API_KEY environment variable is set[/dim]"
-                            )
-                            transcript_results[Path(audio_path).name] = {
-                                "error": str(e)
-                            }
-
-                        progress.remove_task(transcribe_task)
+        # Process videos using the new handler
+        results, transcript_results = process_handler.process_videos(
+            video_files, audio, all_frames, frames, transcribe
+        )
 
         # Show results summary
-        show_results_summary(results, transcript_results)
+        display.show_results_summary(results, transcript_results)
         console.print("🎉 [green]All processing completed successfully![/green]")
 
     except Exception as e:
@@ -276,63 +171,8 @@ def info(
     try:
         video_files = get_video_files(input_path_obj)
 
-        # Create info table with metadata columns
-        table = Table(title="📹 Video Files Information")
-        table.add_column("File", style="cyan")
-        table.add_column("Size", style="yellow")
-        table.add_column("Resolution", style="green")
-        table.add_column("FPS", style="blue")
-        table.add_column("Duration", style="magenta")
-        table.add_column("Frames", style="red")
-        table.add_column("Path", style="dim")
-
-        total_size = 0
-        for video_file in video_files:
-            size_bytes = video_file.stat().st_size
-            total_size += size_bytes
-            size_str = format_size(size_bytes)
-
-            try:
-                processor = VideoProcessor(video_file)
-                video_metadata = processor.get_video_metadata()
-
-                if "error" in video_metadata:
-                    table.add_row(
-                        video_file.name,
-                        size_str,
-                        "Error",
-                        "Error",
-                        "Error",
-                        "Error",
-                        str(video_file.parent),
-                    )
-                else:
-                    table.add_row(
-                        video_file.name,
-                        size_str,
-                        video_metadata["resolution"],
-                        f"{video_metadata['fps']}",
-                        f"{video_metadata['duration']}s",
-                        str(video_metadata["frame_count"]),
-                        str(video_file.parent),
-                    )
-            except Exception:
-                table.add_row(
-                    video_file.name,
-                    size_str,
-                    "Error",
-                    "Error",
-                    "Error",
-                    "Error",
-                    str(video_file.parent),
-                )
-
-        console.print(table)
-
-        # Show summary
-        console.print(
-            f"\n📈 [bold]Total:[/bold] {len(video_files)} files, {format_size(total_size)}"
-        )
+        # Display video information using DisplayManager
+        display.show_video_info_table(video_files, format_size)
 
     except Exception as e:
         console.print(f"❌ [red]Error:[/red] {e}")
@@ -381,26 +221,8 @@ def setup() -> None:
 
         progress.remove_task(deps_task)
 
-    # Show setup results
-    table = Table(title="🛠️  Setup Status")
-    table.add_column("Component", style="cyan")
-    table.add_column("Status", style="green")
-    table.add_column("Details", style="dim")
-
-    table.add_row("Data Directories", "✅ Ready", "Created in ./data/")
-    table.add_row(
-        "OpenAI API Key",
-        "✅ Found" if api_key else "⚠️  Missing",
-        "Set OPENAI_API_KEY env var for transcription"
-        if not api_key
-        else "Ready for transcription",
-    )
-
-    console.print(table)
-
-    if not api_key:
-        console.print("\n💡 [yellow]To enable transcription:[/yellow]")
-        console.print("   [dim]export OPENAI_API_KEY='your-api-key-here'[/dim]")
+    # Show setup results using DisplayManager
+    display.show_setup_status(api_key is not None)
 
 
 if __name__ == "__main__":

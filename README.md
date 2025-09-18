@@ -9,8 +9,9 @@ A comprehensive Python tool for processing video files to extract audio, frames,
   - Extract all frames with millisecond timestamps
   - Extract frames at specific positions per second (start, middle, end, random)
 - **🎙️ AI Transcription**: Generate transcriptions with word-level timestamps using OpenAI Whisper
+- **⏱️ Second-Aligned Words**: Map words to exact seconds for perfect frame-transcript synchronization
 - **📁 Batch Processing**: Process single videos or entire directories
-- **🔄 Frame-Audio Synchronization**: Align transcript words with extracted frames
+- **🔄 Advanced Frame-Audio Sync**: Align transcript words with extracted frames with speech coverage analysis
 - **🎨 Beautiful CLI**: Rich terminal interface with progress tracking and tables
 - **🧪 Comprehensive Testing**: Full test suite with pytest
 - **📊 Structured Logging**: Professional logging system
@@ -114,7 +115,7 @@ sniffer process INPUT_PATH [OPTIONS]
 sniffer process video.mp4 --frames middle --transcribe
 
 # Batch process folder with audio only
-sniffer process ./videos --no-frames
+sniffer process ./videos
 
 # Extract all frames without audio
 sniffer process video.mp4 --all-frames --no-audio
@@ -138,45 +139,134 @@ sniffer setup
 
 ## 🐍 Python API
 
-Use SunDogs programmatically in your Python applications:
+Use Sniffer programmatically in your Python applications:
+
+### Core Video Processing
 
 ```python
 from sniffer import VideoProcessor, AudioTranscriber
+from pathlib import Path
 
-# Initialize processor
+# Initialize processor for single video
 processor = VideoProcessor("path/to/video.mp4")
 
-# Extract audio
+# Extract audio and frames
 audio_path = processor.extract_audio()
-
-# Extract frames at middle position per second
 frames = processor.extract_frames_by_position("middle")
+metadata = processor.get_video_metadata()
 
-# Transcribe audio with timestamps
-transcriber = AudioTranscriber()
-transcript = transcriber.transcribe_with_timestamps(audio_path)
-
-# Synchronize frames with speech
-frame_times = [1.0, 2.0, 3.0]  # seconds
-sync_data = transcriber.synchronize_with_frames(transcript, frame_times)
+# Complete processing pipeline
+results = processor.process_all(
+    extract_audio=True,
+    extract_all_frames=False,
+    frame_position="middle"
+)
 ```
 
-### Batch Processing
+### 🆕 Second-Aligned Transcription
+
+Perfect synchronization between frames and transcript words:
+
+```python
+from sniffer import AudioTranscriber
+
+# Transcribe with enhanced word-level timestamps
+transcriber = AudioTranscriber("audio.mp3")
+transcript = transcriber.transcribe()
+
+# 🎯 NEW: Get words with second mapping
+enhanced_words = transcriber.extract_word_timestamps(transcript)
+# Each word includes: word, start, end, seconds_spoken
+# Example: {"word": "hello", "start": 0.0, "end": 0.5, "seconds_spoken": [0]}
+
+# 🎯 NEW: Get words organized by second
+words_by_second = transcriber.extract_words_by_second(transcript)
+# Returns: {0: [words in second 0], 1: [words in second 1], ...}
+
+# 🎯 NEW: Quick lookup for specific second
+words_at_second_5 = transcriber.get_words_for_second(transcript, 5)
+# Returns all words spoken during second 5
+
+# 🎯 NEW: Advanced frame-transcript synchronization
+frame_seconds = [0, 1, 2, 3, 4, 5]  # Seconds where you extracted frames
+sync_data = transcriber.synchronize_transcript_with_frames(transcript, frame_seconds)
+
+# Analyze each frame's speech content
+for second, data in sync_data.items():
+    if data["has_speech"]:
+        primary_words = ", ".join(data["primary_words"])
+        coverage = data["speech_coverage"] * 100
+        print(f"Frame {second}s: '{primary_words}' ({coverage:.0f}% speech)")
+    else:
+        print(f"Frame {second}s: (silence)")
+```
+
+### Service Layer Usage (Advanced)
+
+For fine-grained control over processing:
+
+```python
+from sniffer.services import VideoMetadataService, FrameExtractionService
+from sniffer.services.frame_extraction import FrameExtractionConfig
+from pathlib import Path
+
+# Direct service usage
+video_path = Path("video.mp4")
+
+# Extract metadata with dedicated service
+metadata_service = VideoMetadataService()
+metadata = metadata_service.extract_metadata(video_path)
+
+# Configure frame extraction precisely
+frame_service = FrameExtractionService()
+config = FrameExtractionConfig(
+    video_path=video_path,
+    position="random",
+    output_dir="custom/frames/"
+)
+frames = frame_service.extract_frames_by_position(config)
+```
+
+### Complete Workflow Example
 
 ```python
 from pathlib import Path
+from sniffer import VideoProcessor, AudioTranscriber
 
-# Process entire directory
-processor = VideoProcessor("./videos")
+# 1. Process video
+video_file = Path("presentation.mp4")
+processor = VideoProcessor(video_file)
 results = processor.process_all(
     extract_audio=True,
-    frame_position="middle"
+    frame_position="middle"  # Extract middle frame of each second
 )
 
-# Batch transcription
-audio_paths = results["audio_paths"]
-transcriber = AudioTranscriber()
-transcripts = transcriber.transcribe_batch(audio_paths)
+# 2. Transcribe with second-aligned mapping
+if results.get("audio_path"):
+    transcriber = AudioTranscriber(results["audio_path"])
+    transcript = transcriber.transcribe()
+
+    # 3. Get frame seconds from processing results
+    frame_seconds = list(results.get("position_frames", {}).keys())
+
+    # 4. Synchronize transcript with extracted frames
+    sync_data = transcriber.synchronize_transcript_with_frames(
+        transcript, frame_seconds
+    )
+
+    # 5. Analyze synchronized content
+    for second in frame_seconds:
+        frame_path = results["position_frames"][second]
+        words_data = sync_data[second]
+
+        if words_data["has_speech"]:
+            words = ", ".join(words_data["primary_words"])
+            print(f"📸 Frame: {Path(frame_path).name}")
+            print(f"💬 Speech: '{words}' ({words_data['word_count']} words)")
+            print(f"📊 Coverage: {words_data['speech_coverage']*100:.0f}%")
+        else:
+            print(f"📸 Frame: {Path(frame_path).name} (visual only)")
+        print()
 ```
 
 ## 🗺️ Architecture & Call Flow
@@ -186,24 +276,30 @@ transcripts = transcriber.transcribe_batch(audio_paths)
 ```mermaid
 graph TB
     CLI[CLI Entry Point<br/>main.py] --> |setup| SETUP[setup_directories]
-    CLI --> |process| PROCESS[process command]
-    CLI --> |info| INFO[info command]
+    CLI --> |process| PROCESS[ProcessHandler]
+    CLI --> |info| INFO[DisplayManager]
 
     PROCESS --> VP[VideoProcessor]
     PROCESS --> AT[AudioTranscriber]
 
+    VP --> |services| MS[VideoMetadataService]
+    VP --> |services| FS[FrameExtractionService]
     VP --> |extract_audio| AUDIO[Audio Extraction]
-    VP --> |extract_frames| FRAMES[Frame Extraction]
-    VP --> |process_all| BATCH[Batch Processing]
+
+    FS --> |context manager| VC[VideoCapture]
+    MS --> VC
+    VC --> |OpenCV| CV[cv2.VideoCapture]
 
     AUDIO --> |MoviePy| MP3[MP3 Files]
-    FRAMES --> |OpenCV| PNG[PNG Files]
+    FS --> |OpenCV| PNG[PNG Files]
 
-    AT --> |transcribe_batch| WHISPER[OpenAI Whisper API]
+    AT --> |transcribe| WHISPER[OpenAI Whisper API]
     WHISPER --> JSON[JSON Transcripts]
 
     VP --> UTILS[Utils Layer]
     AT --> UTILS
+    MS --> UTILS
+    FS --> UTILS
 
     UTILS --> FILE[File Operations]
     UTILS --> DIR[Directory Management]
@@ -217,14 +313,25 @@ graph TB
 ```python
 # Command flow
 app.command("process") → process() → {
-    VideoProcessor(input_path)
-    ├── extract_audio() → list[str]
-    ├── extract_frames_by_position() → dict[str, dict[int, str]]
-    └── extract_all_frames() → dict[str, list[str]]
+    ProcessHandler() → {
+        VideoProcessor(input_path) → {
+            VideoMetadataService() → metadata extraction
+            FrameExtractionService() → frame processing
+            ├── extract_audio() → list[str]
+            ├── extract_frames_by_position() → dict[int, str]
+            └── extract_all_frames() → list[str]
+        }
 
-    AudioTranscriber() → {
-        ├── transcribe_batch() → dict[str, dict]
-        └── synchronize_with_frames() → list[dict]
+        AudioTranscriber() → {
+            ├── transcribe() → dict
+            └── synchronize_with_frames() → list[dict]
+        }
+    }
+
+    DisplayManager() → {
+        ├── show_processing_config()
+        ├── show_results_summary()
+        └── show_video_info_table()
     }
 }
 ```
@@ -232,21 +339,19 @@ app.command("process") → process() → {
 #### 2. VideoProcessor Class (`video_processor.py`)
 
 ```python
-VideoProcessor(video_input) → {
+VideoProcessor(video_file) → {
     __init__() → {
-        ├── _get_video_files() → list[Path]
+        ├── VideoMetadataService() → metadata operations
+        ├── FrameExtractionService() → frame operations
         ├── ensure_directory() → utils.directory
         └── get_logger() → utils.logging
     }
 
     # Public Methods
     ├── extract_audio() → _extract_single_audio() → MoviePy
-    ├── extract_all_frames() → _extract_all_frames_single() → OpenCV
-    ├── extract_frames_by_position() → {
-    │   ├── _extract_frames_by_position_single()
-    │   ├── _calculate_timestamps_per_second()
-    │   └── _fetch_frames_by_timestamp() → OpenCV
-    │   }
+    ├── extract_all_frames() → FrameExtractionService.extract_all_frames()
+    ├── extract_frames_by_position() → FrameExtractionService.extract_frames_by_position()
+    ├── get_video_metadata() → VideoMetadataService.extract_metadata()
     └── process_all() → Orchestrates all operations
 }
 ```
@@ -272,7 +377,72 @@ AudioTranscriber(api_key) → {
 }
 ```
 
-#### 4. Utils Layer
+#### 4. Service Layer
+
+```python
+services/ → {
+    video_metadata.py → {
+        VideoMetadataService() → {
+            ├── extract_metadata() → VideoMetadata | dict
+            ├── _extract_opencv_metadata() → dict
+            ├── _extract_moviepy_metadata() → dict
+            └── get_basic_info() → tuple[float, int, float]
+        }
+    }
+
+    frame_extraction.py → {
+        FrameExtractionService() → {
+            ├── extract_all_frames() → list[str]
+            ├── extract_frames_by_position() → dict[int, str]
+            ├── _get_video_info() → tuple[float, int, float]
+            ├── _calculate_timestamps_per_second() → list[tuple[int, int]]
+            └── _fetch_frames_by_timestamp() → dict[int, str]
+        }
+
+        FrameExtractionConfig() → {
+            ├── video_path: Path
+            ├── position: Optional[str]
+            ├── extract_all: bool
+            └── output_dir: Optional[str]
+        }
+    }
+
+    video_capture.py → {
+        VideoCapture(video_path) → {
+            ├── __enter__() → cv2.VideoCapture
+            ├── __exit__() → resource cleanup
+            └── is_opened → bool property
+        }
+    }
+}
+```
+
+#### 5. CLI Layer
+
+```python
+cli/ → {
+    process_handler.py → {
+        ProcessHandler() → {
+            ├── process_videos() → tuple[list[ProcessResults], dict]
+            ├── _process_video_files() → list[ProcessResults]
+            └── _process_transcriptions() → dict
+        }
+    }
+
+    display.py → {
+        DisplayManager() → {
+            ├── show_processing_config() → None
+            ├── show_results_summary() → None
+            ├── show_video_info_table() → None
+            ├── show_setup_status() → None
+            ├── print() → console.print wrapper
+            └── print_exception() → console.print_exception wrapper
+        }
+    }
+}
+```
+
+#### 6. Utils Layer
 
 ```python
 utils/ → {
@@ -390,6 +560,7 @@ data/
 
 ### Transcript Format
 
+**Original OpenAI Whisper Format:**
 ```json
 {
   "text": "Full transcript text",
@@ -408,6 +579,44 @@ data/
       "words": [...]
     }
   ]
+}
+```
+
+**🆕 Enhanced Second-Aligned Format:**
+
+*Words with second mapping:*
+```json
+{
+  "word": "Hello",
+  "start": 0.0,
+  "end": 0.5,
+  "seconds_spoken": [0]
+}
+```
+
+*Words organized by second:*
+```json
+{
+  "0": [
+    {"word": "Hello", "start": 0.0, "end": 0.5, "duration_in_second": 0.5}
+  ],
+  "1": [
+    {"word": "world", "start": 0.6, "end": 1.2, "duration_in_second": 0.4}
+  ]
+}
+```
+
+*Frame synchronization data:*
+```json
+{
+  "0": {
+    "second": 0,
+    "words": [...],
+    "word_count": 2,
+    "speech_coverage": 0.9,
+    "primary_words": ["Hello", "world"],
+    "has_speech": true
+  }
 }
 ```
 
@@ -465,8 +674,17 @@ make ci
 sniffer/
 ├── __init__.py                 # Package exports
 ├── main.py                     # CLI entry point
-├── video_processor.py          # Video processing core
+├── video_processor.py          # Video processing orchestrator
 ├── transcription.py            # Audio transcription
+├── cli/                        # CLI layer
+│   ├── __init__.py            # CLI package exports
+│   ├── process_handler.py     # Video processing workflow
+│   └── display.py             # Rich console output management
+├── services/                   # Service layer
+│   ├── __init__.py            # Services package exports
+│   ├── video_metadata.py      # Video metadata extraction
+│   ├── frame_extraction.py    # Frame extraction operations
+│   └── video_capture.py       # Resource-managed video capture
 ├── config/                     # Configuration
 │   ├── __init__.py            # Config package exports
 │   └── constants.py           # Application constants
@@ -490,6 +708,112 @@ sniffer/
 - **Loguru**: Modern logging library
 - **python-dotenv**: Environment variable management
 - **Typer + Rich**: Beautiful CLI interface
+
+## 🚀 Real-World Use Cases
+
+### 📚 Educational Content Analysis
+
+Perfect for analyzing educational videos, lectures, and tutorials:
+
+```python
+from sniffer import VideoProcessor, AudioTranscriber
+
+# Process educational video
+processor = VideoProcessor("lecture.mp4")
+results = processor.process_all(extract_audio=True, frame_position="middle")
+
+# Get second-by-second analysis
+transcriber = AudioTranscriber(results["audio_path"])
+transcript = transcriber.transcribe()
+frame_seconds = list(results["position_frames"].keys())
+
+# Sync transcript with visual content
+sync_data = transcriber.synchronize_transcript_with_frames(transcript, frame_seconds)
+
+# Identify key educational moments
+key_moments = []
+for second, data in sync_data.items():
+    if data["speech_coverage"] > 0.7:  # High speech activity
+        keywords = data["primary_words"]
+        if any(word in ["important", "key", "remember", "note"] for word in keywords):
+            key_moments.append({
+                "second": second,
+                "frame": results["position_frames"][second],
+                "keywords": keywords,
+                "importance": "high"
+            })
+
+print(f"Found {len(key_moments)} key educational moments!")
+```
+
+### 🎬 Video Content Indexing
+
+Create searchable video indexes with frame-accurate word positioning:
+
+```python
+# Build searchable index
+def create_video_index(video_path):
+    processor = VideoProcessor(video_path)
+    results = processor.process_all(extract_audio=True, frame_position="start")
+
+    transcriber = AudioTranscriber(results["audio_path"])
+    transcript = transcriber.transcribe()
+
+    # Create searchable word index with exact frame references
+    word_index = {}
+    words_by_second = transcriber.extract_words_by_second(transcript)
+
+    for second, words in words_by_second.items():
+        for word_data in words:
+            word = word_data["word"].lower()
+            if word not in word_index:
+                word_index[word] = []
+
+            word_index[word].append({
+                "second": second,
+                "frame_path": results["position_frames"].get(second),
+                "confidence": word_data["duration_in_second"],
+                "context": [w["word"] for w in words]
+            })
+
+    return word_index
+
+# Usage
+index = create_video_index("presentation.mp4")
+search_results = index.get("algorithm", [])  # Find all mentions of "algorithm"
+```
+
+### 🎭 Content Moderation & Analysis
+
+Automatically detect and flag content based on speech-visual correlation:
+
+```python
+def analyze_content_safety(video_path, flagged_terms):
+    processor = VideoProcessor(video_path)
+    results = processor.process_all(extract_audio=True, frame_position="random")
+
+    transcriber = AudioTranscriber(results["audio_path"])
+    transcript = transcriber.transcribe()
+
+    # Check each second for flagged content
+    alerts = []
+    for second in range(int(transcript.get("words", [])[-1].get("end", 0)) + 1):
+        words_data = transcriber.get_words_for_second(transcript, second)
+        spoken_words = [w["word"].lower() for w in words_data]
+
+        # Check for flagged terms
+        for term in flagged_terms:
+            if term.lower() in " ".join(spoken_words):
+                alerts.append({
+                    "second": second,
+                    "term": term,
+                    "context": spoken_words,
+                    "frame": results["position_frames"].get(second),
+                    "severity": "high" if any("explicit" in w for w in spoken_words) else "medium"
+                })
+
+    return alerts
+```
 
 ## 📄 License
 
