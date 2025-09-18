@@ -1,0 +1,24 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Mac
+.DS_Store
+
+# Application-specific files
+data/video/*.mp4
+data/video_frames/*
+data/audio/*
+data/transcripts/*
+
+.claude
+docs/*.pdf
+logs/sniffer.log
+.env
