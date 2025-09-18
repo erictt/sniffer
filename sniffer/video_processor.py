@@ -18,28 +18,31 @@ from .utils.logging import get_logger, ProgressLogger
 
 class ProcessResults(TypedDict, total=False):
     """Type definition for VideoProcessor.process_all() results."""
-    processed_files: list[str]
-    audio_paths: list[str]
-    all_frames: dict[str, list[str]]
-    position_frames: dict[str, dict[int, str]]
-    transcripts: dict[str, dict]
+
+    processed_file: str
+    audio_path: str
+    all_frames: list[str]
+    position_frames: dict[int, str]
 
 
 class VideoProcessor:
     """
-    A class for processing video files to extract audio and frames.
-    Supports both single file and batch processing.
+    A class for processing a single video file to extract audio and frames.
     """
 
-    def __init__(self, video_input: str | Path):
+    def __init__(self, video_file: str | Path):
         """
-        Initialize VideoProcessor with a video file or directory path.
+        Initialize VideoProcessor with a single video file.
 
         Args:
-            video_input: Path to a video file or directory containing MP4 files
+            video_file: Path to a single MP4 video file
         """
-        self.video_input = Path(video_input)
-        self.video_files = self._get_video_files()
+        self.video_file = Path(video_file)
+        if not self.video_file.is_file():
+            raise ValueError(f"Path must be a file: {self.video_file}")
+        if self.video_file.suffix.lower() != ".mp4":
+            raise ValueError(f"File must be MP4 format: {self.video_file}")
+
         self.logger = get_logger("sniffer.video")
         self.progress = ProgressLogger("sniffer.video.progress")
 
@@ -47,40 +50,14 @@ class VideoProcessor:
         ensure_directory(AUDIO_PATH)
         ensure_directory(VIDEO_FRAMES_PATH)
 
-    def _get_video_files(self) -> list[Path]:
-        """Get list of video files to process."""
-        if self.video_input.is_file():
-            if self.video_input.suffix.lower() == ".mp4":
-                return [self.video_input]
-            else:
-                raise ValueError(f"File must be MP4 format: {self.video_input}")
-        elif self.video_input.is_dir():
-            mp4_files = list(self.video_input.glob("*.mp4"))
-            if not mp4_files:
-                raise ValueError(f"No MP4 files found in directory: {self.video_input}")
-            return sorted(mp4_files)
-        else:
-            raise ValueError(f"Path does not exist: {self.video_input}")
-
-    def extract_audio(self, video_path: Optional[Path] = None) -> list[str]:
+    def extract_audio(self) -> str:
         """
-        Extract audio from video file(s).
-
-        Args:
-            video_path: Specific video file to process (optional for single file mode)
+        Extract audio from the video file.
 
         Returns:
-            Path to extracted audio file(s)
+            Path to extracted audio file
         """
-        if video_path:
-            return [self._extract_single_audio(video_path)]
-
-        # Always return a list, even for single files
-        audio_paths = []
-        for video_file in self.video_files:
-            audio_path = self._extract_single_audio(video_file)
-            audio_paths.append(audio_path)
-        return audio_paths
+        return self._extract_single_audio(self.video_file)
 
     def _extract_single_audio(self, video_path: Path) -> str:
         """Extract audio from a single video file."""
@@ -102,28 +79,14 @@ class VideoProcessor:
             self.logger.error(f"Audio extraction failed for {video_path.name}: {e}")
             raise
 
-    def extract_all_frames(
-        self, video_path: Optional[Path] = None
-    ) -> dict[str, list[str]]:
+    def extract_all_frames(self) -> list[str]:
         """
-        Extract all frames from video file(s).
-
-        Args:
-            video_path: Specific video file to process (optional for single file mode)
+        Extract all frames from the video file.
 
         Returns:
-            List of frame file paths for single video, or dict mapping video names to frame paths
+            List of frame file paths
         """
-        if video_path:
-            frames = self._extract_all_frames_single(video_path)
-            return {video_path.name: frames}
-
-        # Always return a dict, even for single files
-        all_frames = {}
-        for video_file in self.video_files:
-            frames = self._extract_all_frames_single(video_file)
-            all_frames[video_file.name] = frames
-        return all_frames
+        return self._extract_all_frames_single(self.video_file)
 
     def _extract_all_frames_single(self, video_path: Path) -> list[str]:
         """Extract all frames from a single video file."""
@@ -174,18 +137,15 @@ class VideoProcessor:
         self.logger.info(f"Successfully extracted {extracted_count} frames")
         return frame_paths
 
-    def extract_frames_by_position(
-        self, position: str = "middle", video_path: Optional[Path] = None
-    ) -> dict[str, dict[int, str]]:
+    def extract_frames_by_position(self, position: str = "middle") -> dict[int, str]:
         """
         Extract one frame per second based on position within that second.
 
         Args:
             position: Position within each second ('start', 'middle', 'end', 'random')
-            video_path: Specific video file to process (optional for single file mode)
 
         Returns:
-            Dict mapping second -> frame_path for single video, or nested dict for batch
+            Dict mapping second -> frame_path
         """
         valid_positions = ["start", "middle", "end", "random"]
         if position not in valid_positions:
@@ -193,16 +153,7 @@ class VideoProcessor:
                 f"Invalid position '{position}'. Must be one of {valid_positions}"
             )
 
-        if video_path:
-            frames = self._extract_frames_by_position_single(video_path, position)
-            return {video_path.name: frames}
-
-        # Always return a dict, even for single files
-        all_frames = {}
-        for video_file in self.video_files:
-            frames = self._extract_frames_by_position_single(video_file, position)
-            all_frames[video_file.name] = frames
-        return all_frames
+        return self._extract_frames_by_position_single(self.video_file, position)
 
     def _extract_frames_by_position_single(
         self, video_path: Path, position: str
@@ -237,7 +188,9 @@ class VideoProcessor:
         )
 
         # Extract frames at calculated timestamps
-        return self._fetch_frames_by_timestamp(video_path, str(video_frame_path), timestamps)
+        return self._fetch_frames_by_timestamp(
+            video_path, str(video_frame_path), timestamps
+        )
 
     def _calculate_timestamps_per_second(
         self, duration_seconds: float, fps: float, position: str
@@ -295,24 +248,17 @@ class VideoProcessor:
         self.logger.info(f"Successfully extracted {len(extracted_frames)} frames")
         return extracted_frames
 
-    def get_video_files(self) -> list[Path]:
-        """Get list of video files that will be processed."""
-        return self.video_files
-
-    def get_video_metadata(self, video_path: Path) -> dict:
+    def get_video_metadata(self) -> dict:
         """
-        Extract metadata from a video file.
-
-        Args:
-            video_path: Path to the video file
+        Extract metadata from the video file.
 
         Returns:
             Dictionary containing video metadata
         """
         try:
-            cap = cv2.VideoCapture(str(video_path))
+            cap = cv2.VideoCapture(str(self.video_file))
             if not cap.isOpened():
-                raise ValueError(f"Could not open video file: {video_path}")
+                raise ValueError(f"Could not open video file: {self.video_file}")
 
             fps = cap.get(cv2.CAP_PROP_FPS)
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -323,7 +269,7 @@ class VideoProcessor:
             cap.release()
 
             # Get additional metadata using moviepy for more details
-            video_clip = mp.VideoFileClip(str(video_path))
+            video_clip = mp.VideoFileClip(str(self.video_file))
             duration_clip = video_clip.duration
             video_clip.close()
 
@@ -334,16 +280,22 @@ class VideoProcessor:
                 "fps": round(fps, 2),
                 "frame_count": frame_count,
                 "duration": round(duration_seconds, 2),
-                "duration_clip": round(duration_clip, 2) if duration_clip else duration_seconds,
+                "duration_clip": round(duration_clip, 2)
+                if duration_clip
+                else duration_seconds,
                 "codec": "MP4",  # Basic codec info since we only support MP4
-                "file_size": video_path.stat().st_size,
+                "file_size": self.video_file.stat().st_size,
             }
 
         except Exception as e:
-            self.logger.error(f"Failed to extract metadata from {video_path.name}: {e}")
+            self.logger.error(
+                f"Failed to extract metadata from {self.video_file.name}: {e}"
+            )
             return {
                 "error": str(e),
-                "file_size": video_path.stat().st_size if video_path.exists() else 0,
+                "file_size": self.video_file.stat().st_size
+                if self.video_file.exists()
+                else 0,
             }
 
     def process_all(
@@ -353,7 +305,7 @@ class VideoProcessor:
         frame_position: Optional[str] = "middle",
     ) -> ProcessResults:
         """
-        Process all videos with specified operations.
+        Process the video with specified operations.
 
         Args:
             extract_audio: Whether to extract audio
@@ -364,14 +316,11 @@ class VideoProcessor:
             Dictionary with results for each operation
         """
         results: ProcessResults = {
-            "processed_files": [str(f) for f in self.video_files],
-            "audio_paths": [],
-            "all_frames": {},
-            "position_frames": {},
+            "processed_file": str(self.video_file),
         }
 
         if extract_audio:
-            results["audio_paths"] = self.extract_audio()
+            results["audio_path"] = self.extract_audio()
 
         if extract_all_frames:
             results["all_frames"] = self.extract_all_frames()

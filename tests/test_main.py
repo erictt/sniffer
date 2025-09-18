@@ -57,42 +57,53 @@ class TestProcessCommand:
         assert result.exit_code == 0
         assert "Process video files" in result.stdout
 
-    def test_process_missing_input(self):
+    @patch("sniffer.main.get_video_files")
+    def test_process_missing_input(self, mock_get_video_files):
         """Test process command with missing input."""
+        mock_get_video_files.side_effect = ValueError(
+            "Path not found: /nonexistent/path"
+        )
+
         result = runner.invoke(app, ["process", "/nonexistent/path"])
         assert result.exit_code == 1
         assert "Path not found" in result.stdout
 
+    @patch("sniffer.main.get_video_files")
     @patch("sniffer.main.VideoProcessor")
-    def test_process_single_video_audio_only(self, mock_processor, temp_dir):
+    def test_process_single_video_audio_only(
+        self, mock_processor, mock_get_video_files, temp_dir
+    ):
         """Test processing single video with audio only."""
         # Create test video file
         test_video = temp_dir / "test.mp4"
         test_video.touch()
 
-        # Setup mock
+        # Setup mocks
+        mock_get_video_files.return_value = [test_video]
+
         mock_instance = Mock()
-        mock_instance.get_video_files.return_value = [test_video]
         mock_instance.process_all.return_value = {
-            "processed_files": [str(test_video)],
-            "audio_paths": [str(temp_dir / "audio.mp3")],
+            "processed_file": str(test_video),
+            "audio_path": str(temp_dir / "audio.mp3"),
         }
         mock_processor.return_value = mock_instance
 
         result = runner.invoke(app, ["process", str(test_video)])
         assert result.exit_code == 0
 
+    @patch("sniffer.main.get_video_files")
     @patch("sniffer.main.VideoProcessor")
-    def test_process_with_frames(self, mock_processor, temp_dir):
+    def test_process_with_frames(self, mock_processor, mock_get_video_files, temp_dir):
         """Test processing with frame extraction."""
         test_video = temp_dir / "test.mp4"
         test_video.touch()
 
+        mock_get_video_files.return_value = [test_video]
+
         mock_instance = Mock()
-        mock_instance.get_video_files.return_value = [test_video]
         mock_instance.process_all.return_value = {
-            "processed_files": [str(test_video)],
-            "audio_paths": [str(temp_dir / "audio.mp3")],
+            "processed_file": str(test_video),
+            "audio_path": str(temp_dir / "audio.mp3"),
             "position_frames": {0: str(temp_dir / "frame_0.png")},
         }
         mock_processor.return_value = mock_instance
@@ -100,21 +111,23 @@ class TestProcessCommand:
         result = runner.invoke(app, ["process", str(test_video), "--frames", "middle"])
         assert result.exit_code == 0
 
+    @patch("sniffer.main.get_video_files")
     @patch("sniffer.main.VideoProcessor")
     @patch("sniffer.main.AudioTranscriber")
     def test_process_with_transcription(
-        self, mock_transcriber, mock_processor, temp_dir
+        self, mock_transcriber, mock_processor, mock_get_video_files, temp_dir
     ):
         """Test processing with transcription."""
         test_video = temp_dir / "test.mp4"
         test_video.touch()
 
-        # Setup video processor mock
+        # Setup mocks
+        mock_get_video_files.return_value = [test_video]
+
         mock_video_instance = Mock()
-        mock_video_instance.get_video_files.return_value = [test_video]
         mock_video_instance.process_all.return_value = {
-            "processed_files": [str(test_video)],
-            "audio_paths": [str(temp_dir / "audio.mp3")],
+            "processed_file": str(test_video),
+            "audio_path": str(temp_dir / "audio.mp3"),
         }
         mock_processor.return_value = mock_video_instance
 
@@ -129,17 +142,19 @@ class TestProcessCommand:
             result = runner.invoke(app, ["process", str(test_video), "--transcribe"])
             assert result.exit_code == 0
 
+    @patch("sniffer.main.get_video_files")
     @patch("sniffer.main.VideoProcessor")
-    def test_process_verbose_mode(self, mock_processor, temp_dir):
+    def test_process_verbose_mode(self, mock_processor, mock_get_video_files, temp_dir):
         """Test processing in verbose mode."""
         test_video = temp_dir / "test.mp4"
         test_video.touch()
 
+        mock_get_video_files.return_value = [test_video]
+
         mock_instance = Mock()
-        mock_instance.get_video_files.return_value = [test_video]
         mock_instance.process_all.return_value = {
-            "processed_files": [str(test_video)],
-            "audio_paths": [str(temp_dir / "audio.mp3")],
+            "processed_file": str(test_video),
+            "audio_path": str(temp_dir / "audio.mp3"),
         }
         mock_processor.return_value = mock_instance
 
@@ -169,26 +184,33 @@ class TestInfoCommand:
         assert result.exit_code == 0
         assert "Show information about video files" in result.stdout
 
-    def test_info_missing_path(self):
+    @patch("sniffer.main.get_video_files")
+    def test_info_missing_path(self, mock_get_video_files):
         """Test info command with missing path."""
+        mock_get_video_files.side_effect = ValueError(
+            "Path not found: /nonexistent/path"
+        )
+
         result = runner.invoke(app, ["info", "/nonexistent/path"])
         assert result.exit_code == 1
         assert "Path not found" in result.stdout
 
+    @patch("sniffer.main.get_video_files")
     @patch("sniffer.main.VideoProcessor")
-    def test_info_single_video(self, mock_processor, temp_dir):
+    def test_info_single_video(self, mock_processor, mock_get_video_files, temp_dir):
         """Test info command with single video."""
         test_video = temp_dir / "test.mp4"
         test_video.write_text("fake video content")  # Add some content for size
 
+        mock_get_video_files.return_value = [test_video]
+
         mock_instance = Mock()
-        mock_instance.get_video_files.return_value = [test_video]
         mock_instance.get_video_metadata.return_value = {
             "resolution": "1920x1080",
             "fps": 30.0,
             "duration": 10.5,
             "frame_count": 315,
-            "file_size": 1000000
+            "file_size": 1000000,
         }
         mock_processor.return_value = mock_instance
 
@@ -196,8 +218,9 @@ class TestInfoCommand:
         assert result.exit_code == 0
         assert "test.mp4" in result.stdout
 
+    @patch("sniffer.main.get_video_files")
     @patch("sniffer.main.VideoProcessor")
-    def test_info_multiple_videos(self, mock_processor, temp_dir):
+    def test_info_multiple_videos(self, mock_processor, mock_get_video_files, temp_dir):
         """Test info command with multiple videos."""
         video_files = []
         for i in range(3):
@@ -205,14 +228,15 @@ class TestInfoCommand:
             video_file.write_text(f"fake video content {i}")
             video_files.append(video_file)
 
+        mock_get_video_files.return_value = video_files
+
         mock_instance = Mock()
-        mock_instance.get_video_files.return_value = video_files
         mock_instance.get_video_metadata.return_value = {
             "resolution": "1920x1080",
             "fps": 30.0,
             "duration": 10.5,
             "frame_count": 315,
-            "file_size": 1000000
+            "file_size": 1000000,
         }
         mock_processor.return_value = mock_instance
 
@@ -220,13 +244,13 @@ class TestInfoCommand:
         assert result.exit_code == 0
         assert "3 files" in result.stdout
 
-    @patch("sniffer.main.VideoProcessor")
-    def test_info_error_handling(self, mock_processor, temp_dir):
+    @patch("sniffer.main.get_video_files")
+    def test_info_error_handling(self, mock_get_video_files, temp_dir):
         """Test info command error handling."""
         test_video = temp_dir / "test.mp4"
         test_video.touch()
 
-        mock_processor.side_effect = Exception("Info error")
+        mock_get_video_files.side_effect = Exception("Info error")
 
         result = runner.invoke(app, ["info", str(test_video)])
         assert result.exit_code == 1

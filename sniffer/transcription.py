@@ -13,17 +13,21 @@ from .config.constants import OPENAI_API_KEY
 
 class AudioTranscriber:
     """
-    A class for transcribing audio files using OpenAI's Whisper API.
+    A class for transcribing a single audio file using OpenAI's Whisper API.
     Provides word-level timestamps for precise audio-text alignment.
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, audio_file: str | Path, api_key: Optional[str] = None):
         """
-        Initialize AudioTranscriber with OpenAI API key.
+        Initialize AudioTranscriber with a single audio file and OpenAI API key.
 
         Args:
+            audio_file: Path to the audio file to transcribe
             api_key: OpenAI API key (if not provided, will use OPENAI_API_KEY from config)
         """
+        self.audio_file = Path(audio_file)
+        if not self.audio_file.exists():
+            raise FileNotFoundError(f"Audio file not found: {self.audio_file}")
 
         self.api_key = api_key or OPENAI_API_KEY
         if not self.api_key:
@@ -35,38 +39,36 @@ class AudioTranscriber:
         self.logger = get_logger("sniffer.transcription")
         self.progress = ProgressLogger("sniffer.transcription.progress")
 
-    def transcribe_with_timestamps(
+    def transcribe(
         self,
-        audio_path: str | Path,
         response_format: str = "verbose_json",
         timestamp_granularities: list[str] | None = None,
+        save_transcript: bool = True,
+        output_dir: Optional[str] = None,
     ) -> dict:
         """
-        Transcribe audio file with word-level timestamps.
+        Transcribe the audio file with word-level timestamps.
 
         Args:
-            audio_path: Path to audio file
             response_format: Format for transcription response ("verbose_json" for timestamps)
             timestamp_granularities: List of granularities ("word", "segment")
+            save_transcript: Whether to save transcript as JSON file
+            output_dir: Directory to save transcript file (default: data/transcripts/)
 
         Returns:
             Dictionary containing transcription with word-level timestamps
         """
-        audio_path = Path(audio_path)
-
-        if not audio_path.exists():
-            raise FileNotFoundError(f"Audio file not found: {audio_path}")
-
         if timestamp_granularities is None:
             timestamp_granularities = ["word", "segment"]
 
-        self.logger.info(f"Transcribing audio: {audio_path.name}")
+        self.logger.info(f"Transcribing audio: {self.audio_file.name}")
 
         try:
-            with open(audio_path, "rb") as audio_file:
+            with open(self.audio_file, "rb") as audio_file:
                 # Use verbose_json format when timestamp_granularities are provided
                 if timestamp_granularities and response_format == "verbose_json":
                     from typing import Literal
+
                     # Ensure timestamp_granularities contains only valid values
                     valid_granularities: list[Literal["word", "segment"]] = []
                     for g in timestamp_granularities:
@@ -94,61 +96,30 @@ class AudioTranscriber:
             self.logger.info(
                 f"Successfully transcribed audio: {len(result.get('words', []))} words detected"
             )
+
+            # Save transcript if requested
+            if save_transcript:
+                from .config.constants import TRANSCRIPTS_PATH
+                from .utils.directory import ensure_directory
+
+                if output_dir is None:
+                    output_dir = TRANSCRIPTS_PATH
+
+                ensure_directory(output_dir)
+
+                transcript_filename = f"{self.audio_file.stem}_transcript.json"
+                transcript_path = Path(output_dir) / transcript_filename
+
+                with open(transcript_path, "w", encoding="utf-8") as f:
+                    json.dump(result, f, indent=2, ensure_ascii=False)
+
+                self.logger.info(f"Saved transcript to: {transcript_filename}")
+
             return result
 
         except Exception as e:
-            self.logger.error(f"Transcription failed for {audio_path.name}: {e}")
+            self.logger.error(f"Transcription failed for {self.audio_file.name}: {e}")
             raise
-
-    def transcribe_batch(
-        self,
-        audio_paths: list[str],
-        save_transcripts: bool = True,
-        output_dir: Optional[str] = None,
-    ) -> dict[str, dict]:
-        """
-        Transcribe multiple audio files in batch.
-
-        Args:
-            audio_paths: List of audio file paths
-            save_transcripts: Whether to save transcripts as JSON files
-            output_dir: Directory to save transcript files (default: data/transcripts/)
-
-        Returns:
-            Dictionary mapping audio filenames to transcription results
-        """
-        from .config.constants import TRANSCRIPTS_PATH
-        from .utils.directory import ensure_directory
-
-        if output_dir is None:
-            output_dir = TRANSCRIPTS_PATH
-
-        ensure_directory(output_dir)
-
-        results = {}
-
-        for audio_path_str in audio_paths:
-            audio_path = Path(audio_path_str)
-
-            try:
-                transcript = self.transcribe_with_timestamps(audio_path)
-                results[audio_path.name] = transcript
-
-                if save_transcripts:
-                    # Save transcript as JSON
-                    transcript_filename = f"{audio_path.stem}_transcript.json"
-                    transcript_path = Path(output_dir) / transcript_filename
-
-                    with open(transcript_path, "w", encoding="utf-8") as f:
-                        json.dump(transcript, f, indent=2, ensure_ascii=False)
-
-                    self.logger.info(f"Saved transcript to: {transcript_filename}")
-
-            except Exception as e:
-                self.logger.error(f"Failed to transcribe {audio_path.name}: {e}")
-                results[audio_path.name] = {"error": str(e)}
-
-        return results
 
     def extract_word_timestamps(self, transcript: dict) -> list[dict[str, str | float]]:
         """

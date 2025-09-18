@@ -3,7 +3,6 @@ Tests for video processing functionality.
 """
 
 import pytest
-from pathlib import Path
 from unittest.mock import patch, Mock
 
 from sniffer.video_processor import VideoProcessor
@@ -16,17 +15,14 @@ class TestVideoProcessorInitialization:
         """Test initializing with single video file."""
         processor = VideoProcessor(mock_video_file)
 
-        assert len(processor.video_files) == 1
-        assert processor.video_files[0] == mock_video_file
+        assert processor.video_file == mock_video_file
 
-    def test_init_with_video_directory(self, mock_video_directory, mock_config):
-        """Test initializing with directory of videos."""
-        video_dir, video_files = mock_video_directory
-        processor = VideoProcessor(video_dir)
+    def test_init_with_directory_raises_error(self, mock_video_directory, mock_config):
+        """Test initializing with directory raises error."""
+        video_dir, _ = mock_video_directory
 
-        assert len(processor.video_files) == 3
-        for video_file in video_files:
-            assert video_file in processor.video_files
+        with pytest.raises(ValueError, match="Path must be a file"):
+            VideoProcessor(video_dir)
 
     def test_init_with_non_mp4_file(self, temp_dir, mock_config):
         """Test initializing with non-MP4 file raises error."""
@@ -38,18 +34,10 @@ class TestVideoProcessorInitialization:
 
     def test_init_with_missing_path(self, temp_dir, mock_config):
         """Test initializing with missing path raises error."""
-        missing_path = temp_dir / "missing"
+        missing_path = temp_dir / "missing.mp4"
 
-        with pytest.raises(ValueError, match="Path does not exist"):
+        with pytest.raises(ValueError, match="Path must be a file"):
             VideoProcessor(missing_path)
-
-    def test_init_with_empty_directory(self, temp_dir, mock_config):
-        """Test initializing with directory containing no MP4 files."""
-        empty_dir = temp_dir / "empty"
-        empty_dir.mkdir()
-
-        with pytest.raises(ValueError, match="No MP4 files found"):
-            VideoProcessor(empty_dir)
 
 
 class TestAudioExtraction:
@@ -76,31 +64,8 @@ class TestAudioExtraction:
         mock_clip_instance.close.assert_called_once()
 
         # Verify result
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert result[0].endswith(".mp3")
-
-    @patch("sniffer.video_processor.mp.VideoFileClip")
-    def test_extract_audio_batch(
-        self, mock_video_clip, mock_video_directory, mock_config
-    ):
-        """Test extracting audio from multiple videos."""
-        video_dir, video_files = mock_video_directory
-
-        # Setup mocks
-        mock_clip_instance = Mock()
-        mock_audio_clip = Mock()
-        mock_clip_instance.audio = mock_audio_clip
-        mock_video_clip.return_value = mock_clip_instance
-
-        processor = VideoProcessor(video_dir)
-        result = processor.extract_audio()
-
-        # Verify result
-        assert isinstance(result, list)
-        assert len(result) == 3
-        for audio_path in result:
-            assert audio_path.endswith(".mp3")
+        assert isinstance(result, str)
+        assert result.endswith(".mp3")
 
     @patch("sniffer.video_processor.mp.VideoFileClip")
     def test_extract_audio_failure(self, mock_video_clip, mock_video_file, mock_config):
@@ -157,10 +122,8 @@ class TestFrameExtraction:
         result = processor.extract_all_frames()
 
         # Verify result
-        assert isinstance(result, dict)
-        assert len(result) == 1
-        video_name = list(result.keys())[0]
-        assert len(result[video_name]) == 3
+        assert isinstance(result, list)
+        assert len(result) == 3
         assert mock_imwrite.call_count == 3
 
     @patch("sniffer.video_processor.cv2.VideoCapture")
@@ -207,13 +170,10 @@ class TestFramesByPosition:
 
         # Verify result - should have frames for 3 seconds
         assert isinstance(result, dict)
-        assert len(result) == 1
-        video_name = list(result.keys())[0]
-        frames_dict = result[video_name]
-        assert len(frames_dict) == 3
-        assert 0 in frames_dict
-        assert 1 in frames_dict
-        assert 2 in frames_dict
+        assert len(result) == 3
+        assert 0 in result
+        assert 1 in result
+        assert 2 in result
 
     def test_extract_frames_invalid_position(self, mock_video_file, mock_config):
         """Test extracting frames with invalid position."""
@@ -241,10 +201,7 @@ class TestFramesByPosition:
             result = processor.extract_frames_by_position(position)
 
             assert isinstance(result, dict)
-            assert len(result) == 1  # 1 video file
-            video_name = list(result.keys())[0]
-            frames_dict = result[video_name]
-            assert len(frames_dict) == 2  # 2 seconds of video
+            assert len(result) == 2  # 2 seconds of video
 
 
 class TestProcessAll:
@@ -258,9 +215,8 @@ class TestProcessAll:
                 extract_audio=True, extract_all_frames=False, frame_position=None
             )
 
-            assert "processed_files" in result
-            assert "audio_paths" in result
-            assert len(result["processed_files"]) == 1
+            assert "processed_file" in result
+            assert "audio_path" in result
 
     def test_process_all_complete(self, mock_video_file, mock_config):
         """Test complete processing with all options."""
@@ -284,22 +240,6 @@ class TestProcessAll:
                 frame_position="middle",
             )
 
-            assert "processed_files" in result
-            assert "audio_paths" in result
+            assert "processed_file" in result
+            assert "audio_path" in result
             assert "position_frames" in result
-
-
-class TestVideoFilesList:
-    """Test video files list functionality."""
-
-    def test_get_video_files(self, mock_video_directory, mock_config):
-        """Test getting list of video files."""
-        video_dir, video_files = mock_video_directory
-        processor = VideoProcessor(video_dir)
-
-        result = processor.get_video_files()
-
-        assert len(result) == 3
-        assert all(isinstance(f, Path) for f in result)
-        for video_file in video_files:
-            assert video_file in result
