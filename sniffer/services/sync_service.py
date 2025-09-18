@@ -143,4 +143,3 @@ class SyncService:
             if total_seconds > 0
             else "0.0",
         }
-

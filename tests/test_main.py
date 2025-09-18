@@ -94,7 +94,9 @@ class TestProcessCommand:
     @patch("sniffer.main.get_video_files")
     @patch("sniffer.cli.process_handler.VideoProcessor")
     @patch("sniffer.cli.process_handler.SyncService")
-    def test_process_with_frames(self, mock_sync_service, mock_processor, mock_get_video_files, temp_dir):
+    def test_process_with_frames(
+        self, mock_sync_service, mock_processor, mock_get_video_files, temp_dir
+    ):
         """Test processing with frame extraction."""
         test_video = temp_dir / "test.mp4"
         test_video.touch()
@@ -112,7 +114,7 @@ class TestProcessCommand:
             "duration": 10.0,
             "resolution": "1920x1080",
             "fps": 30.0,
-            "frame_count": 300
+            "frame_count": 300,
         }
         mock_processor.return_value = mock_instance
 

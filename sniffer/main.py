@@ -13,7 +13,13 @@ import click
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from .config import VIDEO_PATH, AUDIO_PATH, VIDEO_FRAMES_PATH, TRANSCRIPTS_PATH, RESULTS_PATH
+from .config import (
+    VIDEO_PATH,
+    AUDIO_PATH,
+    VIDEO_FRAMES_PATH,
+    TRANSCRIPTS_PATH,
+    RESULTS_PATH,
+)
 from .utils import setup_default_logging
 from .utils.directory import ensure_directories
 from .cli import ProcessHandler, DisplayManager
@@ -32,7 +38,9 @@ process_handler = ProcessHandler()
 
 def setup_directories() -> None:
     """Ensure all required directories exist."""
-    ensure_directories([VIDEO_PATH, AUDIO_PATH, VIDEO_FRAMES_PATH, TRANSCRIPTS_PATH, RESULTS_PATH])
+    ensure_directories(
+        [VIDEO_PATH, AUDIO_PATH, VIDEO_FRAMES_PATH, TRANSCRIPTS_PATH, RESULTS_PATH]
+    )
 
 
 def initialize_logging(verbose: bool = False) -> None:
@@ -148,7 +156,9 @@ def process(
 
         # Show results summary (no sync table display)
         has_results_file = len(enhanced_results) > 0
-        display.show_results_summary(results, transcript_results, transcribe, has_results_file)
+        display.show_results_summary(
+            results, transcript_results, transcribe, has_results_file
+        )
         console.print("🎉 [green]All processing completed successfully![/green]")
 
     except Exception as e:

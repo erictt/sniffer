@@ -38,7 +38,11 @@ class DisplayManager:
         self.console.print(config_table)
 
     def show_results_summary(
-        self, results: list[ProcessResults], transcripts: dict | None = None, transcribe: bool = False, has_results_file: bool = False
+        self,
+        results: list[ProcessResults],
+        transcripts: dict | None = None,
+        transcribe: bool = False,
+        has_results_file: bool = False,
     ) -> None:
         """Display a summary of processing results."""
         table = Table(title="🎯 Processing Results Summary")
@@ -79,9 +83,7 @@ class DisplayManager:
 
         # Results file
         if has_results_file:
-            table.add_row(
-                "Results File", "✅ Saved", "data/results/{video_name}.json"
-            )
+            table.add_row("Results File", "✅ Saved", "data/results/{video_name}.json")
 
         self.console.print(table)
 
@@ -128,7 +130,6 @@ class DisplayManager:
                         )
 
             self.console.print("")
-
 
     def show_video_info_table(self, video_files: list[Path]) -> None:
         """Display video files information table."""

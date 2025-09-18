@@ -56,12 +56,14 @@ class ResultsService:
 
         # Add video metadata if available
         if "error" not in video_metadata:
-            enhanced_video_info.update({
-                "duration": f"{video_metadata['duration']:.2f}s",
-                "resolution": video_metadata["resolution"],
-                "fps": video_metadata["fps"],
-                "total_frames": video_metadata["frame_count"],
-            })
+            enhanced_video_info.update(
+                {
+                    "duration": f"{video_metadata['duration']:.2f}s",
+                    "resolution": video_metadata["resolution"],
+                    "fps": video_metadata["fps"],
+                    "total_frames": video_metadata["frame_count"],
+                }
+            )
 
         # Create clean, non-redundant output structure
         output_data = {
@@ -103,6 +105,7 @@ class ResultsService:
     def _get_current_timestamp(self) -> str:
         """Get current timestamp in ISO format."""
         from datetime import datetime
+
         return datetime.now().isoformat()
 
     def _format_file_size(self, size_bytes: int) -> str:
