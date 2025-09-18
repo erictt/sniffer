@@ -7,14 +7,13 @@ from video files with precise word-level timestamps.
 """
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 import click
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from .config import VIDEO_PATH, AUDIO_PATH, VIDEO_FRAMES_PATH, TRANSCRIPTS_PATH
+from .config import VIDEO_PATH, AUDIO_PATH, VIDEO_FRAMES_PATH, TRANSCRIPTS_PATH, RESULTS_PATH
 from .utils import setup_default_logging
 from .utils.directory import ensure_directories
 from .cli import ProcessHandler, DisplayManager
@@ -33,7 +32,7 @@ process_handler = ProcessHandler()
 
 def setup_directories() -> None:
     """Ensure all required directories exist."""
-    ensure_directories([VIDEO_PATH, AUDIO_PATH, VIDEO_FRAMES_PATH, TRANSCRIPTS_PATH])
+    ensure_directories([VIDEO_PATH, AUDIO_PATH, VIDEO_FRAMES_PATH, TRANSCRIPTS_PATH, RESULTS_PATH])
 
 
 def initialize_logging(verbose: bool = False) -> None:
@@ -84,7 +83,7 @@ def process(
         True, "--audio/--no-audio", help="🎵 Extract audio from videos"
     ),
     # Frame options
-    frames: Optional[str] = typer.Option(
+    frames: str | None = typer.Option(
         None,
         "--frames",
         help="🖼️  Extract frames by position per second [start|middle|end|random]",
@@ -143,12 +142,13 @@ def process(
             progress.remove_task(init_task)
 
         # Process videos using the new handler
-        results, transcript_results = process_handler.process_videos(
+        results, transcript_results, enhanced_results = process_handler.process_videos(
             video_files, audio, all_frames, frames, transcribe
         )
 
-        # Show results summary
-        display.show_results_summary(results, transcript_results)
+        # Show results summary (no sync table display)
+        has_results_file = len(enhanced_results) > 0
+        display.show_results_summary(results, transcript_results, transcribe, has_results_file)
         console.print("🎉 [green]All processing completed successfully![/green]")
 
     except Exception as e:
@@ -172,7 +172,7 @@ def info(
         video_files = get_video_files(input_path_obj)
 
         # Display video information using DisplayManager
-        display.show_video_info_table(video_files, format_size)
+        display.show_video_info_table(video_files)
 
     except Exception as e:
         console.print(f"❌ [red]Error:[/red] {e}")

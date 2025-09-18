@@ -17,8 +17,10 @@ data/video/*.mp4
 data/video_frames/*
 data/audio/*
 data/transcripts/*
+data/results/*
 
 .claude
 docs/*.pdf
 logs/sniffer.log
 .env
+.coverage

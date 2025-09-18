@@ -2,7 +2,6 @@
 Display utilities for CLI output formatting.
 """
 
-from typing import Optional
 from pathlib import Path
 
 from rich.console import Console
@@ -22,7 +21,7 @@ class DisplayManager:
         input_path: Path,
         audio: bool,
         all_frames: bool,
-        frames: Optional[str],
+        frames: str | None,
         transcribe: bool,
     ) -> None:
         """Display processing configuration table."""
@@ -39,7 +38,7 @@ class DisplayManager:
         self.console.print(config_table)
 
     def show_results_summary(
-        self, results: list[ProcessResults], transcripts: Optional[dict] = None
+        self, results: list[ProcessResults], transcripts: dict | None = None, transcribe: bool = False, has_results_file: bool = False
     ) -> None:
         """Display a summary of processing results."""
         table = Table(title="🎯 Processing Results Summary")
@@ -78,11 +77,13 @@ class DisplayManager:
                 "Transcription", "✅ Complete", f"{transcript_count} transcript(s)"
             )
 
-        self.console.print(table)
+        # Results file
+        if has_results_file:
+            table.add_row(
+                "Results File", "✅ Saved", "data/results/{video_name}.json"
+            )
 
-        # Show transcription content if available
-        if transcripts:
-            self._show_transcription_details(transcripts)
+        self.console.print(table)
 
     def _show_transcription_details(self, transcripts: dict) -> None:
         """Display detailed transcription content."""
@@ -90,7 +91,9 @@ class DisplayManager:
 
         for audio_filename, transcript_data in transcripts.items():
             if "error" in transcript_data:
-                self.console.print(f"❌ [red]{audio_filename}[/red]: {transcript_data['error']}")
+                self.console.print(
+                    f"❌ [red]{audio_filename}[/red]: {transcript_data['error']}"
+                )
                 continue
 
             self.console.print(f"📄 [bold]{audio_filename}[/bold]")
@@ -104,7 +107,9 @@ class DisplayManager:
             if "words" in transcript_data and transcript_data["words"]:
                 word_count = len(transcript_data["words"])
                 duration = transcript_data.get("duration", "unknown")
-                self.console.print(f"[dim]Word-level timestamps: {word_count} words, duration: {duration}s[/dim]")
+                self.console.print(
+                    f"[dim]Word-level timestamps: {word_count} words, duration: {duration}s[/dim]"
+                )
 
                 # Show first few words as a sample
                 sample_words = transcript_data["words"][:10]
@@ -118,11 +123,14 @@ class DisplayManager:
 
                     if len(transcript_data["words"]) > 10:
                         remaining = len(transcript_data["words"]) - 10
-                        self.console.print(f"  [dim]... and {remaining} more words[/dim]")
+                        self.console.print(
+                            f"  [dim]... and {remaining} more words[/dim]"
+                        )
 
             self.console.print("")
 
-    def show_video_info_table(self, video_files: list[Path], format_size_func) -> None:
+
+    def show_video_info_table(self, video_files: list[Path]) -> None:
         """Display video files information table."""
         from ..video_processor import VideoProcessor
 
@@ -139,7 +147,7 @@ class DisplayManager:
         for video_file in video_files:
             size_bytes = video_file.stat().st_size
             total_size += size_bytes
-            size_str = format_size_func(size_bytes)
+            size_str = self._format_file_size(size_bytes)
 
             try:
                 processor = VideoProcessor(video_file)
@@ -180,7 +188,7 @@ class DisplayManager:
 
         # Show summary
         self.console.print(
-            f"\n📈 [bold]Total:[/bold] {len(video_files)} files, {format_size_func(total_size)}"
+            f"\n📈 [bold]Total:[/bold] {len(video_files)} files, {self._format_file_size(total_size)}"
         )
 
     def show_setup_status(self, api_key_exists: bool) -> None:
@@ -214,3 +222,17 @@ class DisplayManager:
     def print_exception(self):
         """Wrapper for console.print_exception."""
         self.console.print_exception()
+
+    def _format_file_size(self, size_bytes: int) -> str:
+        """Format file size in human-readable format."""
+        if size_bytes == 0:
+            return "0B"
+
+        size_names = ["B", "KB", "MB", "GB", "TB"]
+        i = 0
+        size_value: float = float(size_bytes)
+        while size_value >= 1024 and i < len(size_names) - 1:
+            size_value /= 1024.0
+            i += 1
+
+        return f"{size_value:.1f}{size_names[i]}"

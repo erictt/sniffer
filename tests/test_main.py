@@ -93,20 +93,32 @@ class TestProcessCommand:
 
     @patch("sniffer.main.get_video_files")
     @patch("sniffer.cli.process_handler.VideoProcessor")
-    def test_process_with_frames(self, mock_processor, mock_get_video_files, temp_dir):
+    @patch("sniffer.cli.process_handler.SyncService")
+    def test_process_with_frames(self, mock_sync_service, mock_processor, mock_get_video_files, temp_dir):
         """Test processing with frame extraction."""
         test_video = temp_dir / "test.mp4"
         test_video.touch()
 
         mock_get_video_files.return_value = [test_video]
 
+        # Mock VideoProcessor
         mock_instance = Mock()
         mock_instance.process_all.return_value = {
             "processed_file": str(test_video),
             "audio_path": str(temp_dir / "audio.mp3"),
             "position_frames": {0: str(temp_dir / "frame_0.png")},
         }
+        mock_instance.get_video_metadata.return_value = {
+            "duration": 10.0,
+            "resolution": "1920x1080",
+            "fps": 30.0,
+            "frame_count": 300
+        }
         mock_processor.return_value = mock_instance
+
+        # Mock sync service
+        mock_sync_service.return_value.create_frame_transcript_table.return_value = []
+        mock_sync_service.return_value.get_sync_statistics.return_value = {}
 
         result = runner.invoke(app, ["process", str(test_video), "--frames", "middle"])
         assert result.exit_code == 0
@@ -135,7 +147,7 @@ class TestProcessCommand:
         mock_transcriber_instance = Mock()
         mock_transcriber_instance.transcribe.return_value = {
             "text": "test transcription",
-            "words": []
+            "words": [],
         }
         mock_transcriber.return_value = mock_transcriber_instance
 

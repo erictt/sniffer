@@ -13,6 +13,7 @@ VIDEO_PATH: str = "data/video/"
 AUDIO_PATH: str = "data/audio/"
 VIDEO_FRAMES_PATH: str = "data/video_frames/"
 TRANSCRIPTS_PATH: str = "data/transcripts/"
+RESULTS_PATH: str = "data/results/"
 
 # Logging Configuration
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
