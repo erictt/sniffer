@@ -29,3 +29,13 @@ dev = [
     "ruff>=0.13.0",
     "mypy>=1.13.0",
 ]
+
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["sniffer*"]
+
+[tool.uv]
+package = true

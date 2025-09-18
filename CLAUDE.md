@@ -6,8 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Running the Application
 ```bash
-uv run python -m sniffer.main
-# or
 uv run sniffer
 ```
 
