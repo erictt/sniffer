@@ -240,23 +240,49 @@ def info(
         processor = VideoProcessor(input_path_obj)
         video_files = processor.get_video_files()
 
-        # Create info table
+        # Create info table with metadata columns
         table = Table(title="📹 Video Files Information")
         table.add_column("File", style="cyan")
         table.add_column("Size", style="yellow")
+        table.add_column("Resolution", style="green")
+        table.add_column("FPS", style="blue")
+        table.add_column("Duration", style="magenta")
+        table.add_column("Frames", style="red")
         table.add_column("Path", style="dim")
 
         total_size = 0
         for video_file in video_files:
             size_bytes = video_file.stat().st_size
             total_size += size_bytes
-
-            # Format file size
             size_str = format_size(size_bytes)
 
-            table.add_row(video_file.name, size_str, str(video_file.parent))
+            video_metadata = processor.get_video_metadata(video_file)
+
+            if "error" in video_metadata:
+                table.add_row(
+                    video_file.name,
+                    size_str,
+                    "Error",
+                    "Error",
+                    "Error",
+                    "Error",
+                    str(video_file.parent)
+                )
+            else:
+                table.add_row(
+                    video_file.name,
+                    size_str,
+                    video_metadata["resolution"],
+                    f"{video_metadata['fps']}",
+                    f"{video_metadata['duration']}s",
+                    str(video_metadata["frame_count"]),
+                    str(video_file.parent)
+                )
 
         console.print(table)
+
+        # Show summary
+        total_size = sum(video_file.stat().st_size for video_file in video_files)
         console.print(
             f"\n📈 [bold]Total:[/bold] {len(video_files)} files, {format_size(total_size)}"
         )

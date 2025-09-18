@@ -183,6 +183,13 @@ class TestInfoCommand:
 
         mock_instance = Mock()
         mock_instance.get_video_files.return_value = [test_video]
+        mock_instance.get_video_metadata.return_value = {
+            "resolution": "1920x1080",
+            "fps": 30.0,
+            "duration": 10.5,
+            "frame_count": 315,
+            "file_size": 1000000
+        }
         mock_processor.return_value = mock_instance
 
         result = runner.invoke(app, ["info", str(test_video)])
@@ -200,6 +207,13 @@ class TestInfoCommand:
 
         mock_instance = Mock()
         mock_instance.get_video_files.return_value = video_files
+        mock_instance.get_video_metadata.return_value = {
+            "resolution": "1920x1080",
+            "fps": 30.0,
+            "duration": 10.5,
+            "frame_count": 315,
+            "file_size": 1000000
+        }
         mock_processor.return_value = mock_instance
 
         result = runner.invoke(app, ["info", str(temp_dir)])

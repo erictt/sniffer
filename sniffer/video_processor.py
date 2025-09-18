@@ -299,6 +299,53 @@ class VideoProcessor:
         """Get list of video files that will be processed."""
         return self.video_files
 
+    def get_video_metadata(self, video_path: Path) -> dict:
+        """
+        Extract metadata from a video file.
+
+        Args:
+            video_path: Path to the video file
+
+        Returns:
+            Dictionary containing video metadata
+        """
+        try:
+            cap = cv2.VideoCapture(str(video_path))
+            if not cap.isOpened():
+                raise ValueError(f"Could not open video file: {video_path}")
+
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            duration_seconds = frame_count / fps if fps > 0 else 0
+
+            cap.release()
+
+            # Get additional metadata using moviepy for more details
+            video_clip = mp.VideoFileClip(str(video_path))
+            duration_clip = video_clip.duration
+            video_clip.close()
+
+            return {
+                "resolution": f"{width}x{height}",
+                "width": width,
+                "height": height,
+                "fps": round(fps, 2),
+                "frame_count": frame_count,
+                "duration": round(duration_seconds, 2),
+                "duration_clip": round(duration_clip, 2) if duration_clip else duration_seconds,
+                "codec": "MP4",  # Basic codec info since we only support MP4
+                "file_size": video_path.stat().st_size,
+            }
+
+        except Exception as e:
+            self.logger.error(f"Failed to extract metadata from {video_path.name}: {e}")
+            return {
+                "error": str(e),
+                "file_size": video_path.stat().st_size if video_path.exists() else 0,
+            }
+
     def process_all(
         self,
         extract_audio: bool = True,

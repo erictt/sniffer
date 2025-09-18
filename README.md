@@ -79,16 +79,16 @@ The `.env` file supports the following configuration options:
 
 ```bash
 # Setup directories and check dependencies
-python main.py setup
+sniffer setup
 
 # Process a single video with transcription
-python main.py process video.mp4 --frames middle --transcribe
+sniffer process video.mp4 --frames middle --transcribe
 
 # Batch process a folder of videos
-python main.py process ./videos --frames random
+sniffer process ./videos --frames random
 
 # Get information about videos without processing
-python main.py info ./videos
+sniffer info ./videos
 ```
 
 ## 📖 CLI Commands
@@ -98,7 +98,7 @@ python main.py info ./videos
 Process video files to extract audio, frames, and generate transcriptions.
 
 ```bash
-python main.py process INPUT_PATH [OPTIONS]
+sniffer process INPUT_PATH [OPTIONS]
 ```
 
 **Options:**
@@ -111,13 +111,13 @@ python main.py process INPUT_PATH [OPTIONS]
 **Examples:**
 ```bash
 # Process with middle frames and transcription
-python main.py process video.mp4 --frames middle --transcribe
+sniffer process video.mp4 --frames middle --transcribe
 
 # Batch process folder with audio only
-python main.py process ./videos --no-frames
+sniffer process ./videos --no-frames
 
 # Extract all frames without audio
-python main.py process video.mp4 --all-frames --no-audio
+sniffer process video.mp4 --all-frames --no-audio
 ```
 
 ### `info` - Video Information
@@ -125,7 +125,7 @@ python main.py process video.mp4 --all-frames --no-audio
 Show information about video files without processing them.
 
 ```bash
-python main.py info INPUT_PATH
+sniffer info INPUT_PATH
 ```
 
 ### `setup` - Environment Setup
@@ -133,7 +133,7 @@ python main.py info INPUT_PATH
 Setup required directories and check dependencies.
 
 ```bash
-python main.py setup
+sniffer setup
 ```
 
 ## 🐍 Python API
@@ -177,6 +177,197 @@ results = processor.process_all(
 audio_paths = results["audio_paths"]
 transcriber = AudioTranscriber()
 transcripts = transcriber.transcribe_batch(audio_paths)
+```
+
+## 🗺️ Architecture & Call Flow
+
+### System Overview
+
+```mermaid
+graph TB
+    CLI[CLI Entry Point<br/>main.py] --> |setup| SETUP[setup_directories]
+    CLI --> |process| PROCESS[process command]
+    CLI --> |info| INFO[info command]
+
+    PROCESS --> VP[VideoProcessor]
+    PROCESS --> AT[AudioTranscriber]
+
+    VP --> |extract_audio| AUDIO[Audio Extraction]
+    VP --> |extract_frames| FRAMES[Frame Extraction]
+    VP --> |process_all| BATCH[Batch Processing]
+
+    AUDIO --> |MoviePy| MP3[MP3 Files]
+    FRAMES --> |OpenCV| PNG[PNG Files]
+
+    AT --> |transcribe_batch| WHISPER[OpenAI Whisper API]
+    WHISPER --> JSON[JSON Transcripts]
+
+    VP --> UTILS[Utils Layer]
+    AT --> UTILS
+
+    UTILS --> FILE[File Operations]
+    UTILS --> DIR[Directory Management]
+    UTILS --> LOG[Logging System]
+```
+
+### Core Component Flow
+
+#### 1. CLI Entry Points (`main.py`)
+
+```python
+# Command flow
+app.command("process") → process() → {
+    VideoProcessor(input_path)
+    ├── extract_audio() → list[str]
+    ├── extract_frames_by_position() → dict[str, dict[int, str]]
+    └── extract_all_frames() → dict[str, list[str]]
+
+    AudioTranscriber() → {
+        ├── transcribe_batch() → dict[str, dict]
+        └── synchronize_with_frames() → list[dict]
+    }
+}
+```
+
+#### 2. VideoProcessor Class (`video_processor.py`)
+
+```python
+VideoProcessor(video_input) → {
+    __init__() → {
+        ├── _get_video_files() → list[Path]
+        ├── ensure_directory() → utils.directory
+        └── get_logger() → utils.logging
+    }
+
+    # Public Methods
+    ├── extract_audio() → _extract_single_audio() → MoviePy
+    ├── extract_all_frames() → _extract_all_frames_single() → OpenCV
+    ├── extract_frames_by_position() → {
+    │   ├── _extract_frames_by_position_single()
+    │   ├── _calculate_timestamps_per_second()
+    │   └── _fetch_frames_by_timestamp() → OpenCV
+    │   }
+    └── process_all() → Orchestrates all operations
+}
+```
+
+#### 3. AudioTranscriber Class (`transcription.py`)
+
+```python
+AudioTranscriber(api_key) → {
+    __init__() → OpenAI(api_key)
+
+    # Core Methods
+    ├── transcribe_with_timestamps() → OpenAI.audio.transcriptions.create()
+    ├── transcribe_batch() → {
+    │   ├── transcribe_with_timestamps() (per file)
+    │   └── save_transcripts → JSON files
+    │   }
+
+    # Analysis Methods
+    ├── extract_word_timestamps() → list[dict]
+    ├── extract_segments() → list[dict]
+    ├── get_text_at_timestamp() → str | None
+    └── synchronize_with_frames() → list[dict]
+}
+```
+
+#### 4. Utils Layer
+
+```python
+utils/ → {
+    file.py → {
+        ├── extract_filename_from_path()
+        ├── is_video_file() / is_audio_file()
+        ├── get_file_size() / format_file_size()
+        └── ensure_file_exists()
+    }
+
+    directory.py → {
+        ├── ensure_directory() / ensure_directories()
+        ├── is_directory_empty()
+        ├── list_files_in_directory()
+        └── clean_directory()
+    }
+
+    logging.py → {
+        ├── setup_default_logging()
+        ├── get_logger() → Loguru instance
+        └── ProgressLogger → {
+            ├── start_operation()
+            ├── progress_update()
+            ├── complete_operation()
+            └── operation_error()
+        }
+    }
+}
+```
+
+### Data Flow Examples
+
+#### Complete Processing Pipeline
+
+```python
+# CLI Command: uv run sniffer process video.mp4 --frames middle --transcribe
+
+main.process() → {
+    1. VideoProcessor("video.mp4") → {
+        ├── _get_video_files() → [Path("video.mp4")]
+        └── setup directories
+    }
+
+    2. processor.process_all() → {
+        ├── extract_audio() → ["data/audio/video.mp3"]
+        └── extract_frames_by_position("middle") → {
+            "video.mp4": {0: "frame_s0_500ms.png", 1: "frame_s1_1500ms.png"}
+        }
+    }
+
+    3. AudioTranscriber() → {
+        ├── transcribe_batch(["data/audio/video.mp3"]) → {
+        │   "video.mp3": {
+        │       "text": "transcript...",
+        │       "words": [{"word": "hello", "start": 0.0, "end": 0.5}]
+        │   }
+        │   }
+        └── save transcripts → "data/transcripts/video_transcript.json"
+    }
+
+    4. show_results_summary() → Rich table display
+}
+```
+
+#### Batch Processing Flow
+
+```python
+# CLI Command: uv run sniffer process ./videos --frames random
+
+VideoProcessor("./videos") → {
+    _get_video_files() → [
+        Path("videos/video1.mp4"),
+        Path("videos/video2.mp4"),
+        Path("videos/video3.mp4")
+    ]
+
+    process_all() → {
+        # Parallel processing for each video
+        for video_file in video_files:
+            ├── _extract_single_audio(video_file)
+            └── _extract_frames_by_position_single(video_file, "random")
+    }
+}
+```
+
+### External Dependencies Integration
+
+```python
+# System Integration Points
+{
+    "FFmpeg": "Required by MoviePy for video processing",
+    "OpenCV": "Direct integration for frame extraction",
+    "OpenAI API": "Whisper model for transcription",
+    "File System": "utils.directory & utils.file for I/O operations"
+}
 ```
 
 ## 📁 Output Structure
@@ -243,26 +434,29 @@ Currently supports **MP4 files only**. Additional formats can be added by extend
 
 ```bash
 # Run all tests
-python -m pytest
+uv run pytest
 
 # Run with coverage
-python -m pytest --cov=sniffer
+uv run pytest --cov=sniffer
 
 # Run specific test file
-python -m pytest tests/test_video_processor.py -v
+uv run pytest tests/test_video_processor.py -v
 ```
 
 ### Code Quality
 
 ```bash
 # Format code
-ruff format .
+uv run ruff format .
 
 # Lint code
-ruff check .
+uv run ruff check .
 
 # Type checking
-mypy sniffer/
+uv run mypy sniffer/
+
+# Full CI pipeline
+make ci
 ```
 
 ### Project Structure
