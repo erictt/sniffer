@@ -224,4 +224,3 @@ class DisplayManager:
     def print_exception(self):
         """Wrapper for console.print_exception."""
         self.console.print_exception()
-

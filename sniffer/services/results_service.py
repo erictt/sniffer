@@ -109,7 +109,6 @@ class ResultsService:
 
         return datetime.now().isoformat()
 
-
     def _analyze_speech_patterns(self, words: list[dict]) -> dict[str, Any]:
         """Analyze speaking patterns and gaps in speech."""
         if not words:

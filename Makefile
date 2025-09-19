@@ -72,8 +72,13 @@ type-check: ## Run type checking with mypy
 	$(UV) run mypy $(SRC_DIR)/ --ignore-missing-imports
 	@echo "$(GREEN)Type checking complete!$(RESET)"
 
+.PHONY: format-check
+format-check: ## Check code formatting with ruff
+	@echo "$(GREEN)Checking code formatting...$(RESET)"
+	$(UV) run ruff format --check .
+
 .PHONY: check
-check: lint type-check ## Run all code quality checks
+check: lint format-check type-check ## Run all code quality checks
 	@echo "$(GREEN)All quality checks completed!$(RESET)"
 
 ##@ Testing

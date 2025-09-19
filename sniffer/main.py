@@ -147,7 +147,6 @@ def info(
         raise typer.Exit(1)
 
 
-
 @app.command()
 def setup() -> None:
     """
