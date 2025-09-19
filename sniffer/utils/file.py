@@ -118,3 +118,35 @@ def format_file_size(size_bytes: int) -> str:
         i += 1
 
     return f"{size_value:.1f}{size_names[i]}"
+
+
+def get_video_files(input_path: str | Path) -> list[Path]:
+    """
+    Get list of video files from a path.
+
+    Args:
+        input_path: Path to a video file or directory containing MP4 files
+
+    Returns:
+        List of video file paths
+
+    Raises:
+        ValueError: If path doesn't exist or no video files found
+    """
+    input_path = Path(input_path)
+
+    if not input_path.exists():
+        raise ValueError(f"Path not found: {input_path}")
+
+    if input_path.is_file():
+        if input_path.suffix.lower() == ".mp4":
+            return [input_path]
+        else:
+            raise ValueError(f"File must be MP4 format: {input_path}")
+    elif input_path.is_dir():
+        mp4_files = list(input_path.glob("*.mp4"))
+        if not mp4_files:
+            raise ValueError(f"No MP4 files found in directory: {input_path}")
+        return sorted(mp4_files)
+    else:
+        raise ValueError(f"Invalid path: {input_path}")

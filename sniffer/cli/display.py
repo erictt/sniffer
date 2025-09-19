@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..types import ProcessResults
+from ..utils.file import format_file_size
 
 
 class DisplayManager:
@@ -148,7 +149,7 @@ class DisplayManager:
         for video_file in video_files:
             size_bytes = video_file.stat().st_size
             total_size += size_bytes
-            size_str = self._format_file_size(size_bytes)
+            size_str = format_file_size(size_bytes)
 
             try:
                 processor = VideoProcessor(video_file)
@@ -189,7 +190,7 @@ class DisplayManager:
 
         # Show summary
         self.console.print(
-            f"\n📈 [bold]Total:[/bold] {len(video_files)} files, {self._format_file_size(total_size)}"
+            f"\n📈 [bold]Total:[/bold] {len(video_files)} files, {format_file_size(total_size)}"
         )
 
     def show_setup_status(self, api_key_exists: bool) -> None:
@@ -224,16 +225,3 @@ class DisplayManager:
         """Wrapper for console.print_exception."""
         self.console.print_exception()
 
-    def _format_file_size(self, size_bytes: int) -> str:
-        """Format file size in human-readable format."""
-        if size_bytes == 0:
-            return "0B"
-
-        size_names = ["B", "KB", "MB", "GB", "TB"]
-        i = 0
-        size_value: float = float(size_bytes)
-        while size_value >= 1024 and i < len(size_names) - 1:
-            size_value /= 1024.0
-            i += 1
-
-        return f"{size_value:.1f}{size_names[i]}"

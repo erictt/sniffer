@@ -22,6 +22,7 @@ from .config import (
 )
 from .utils import setup_default_logging
 from .utils.directory import ensure_directories
+from .utils.file import get_video_files
 from .cli import ProcessHandler, DisplayManager
 
 app = typer.Typer(
@@ -34,51 +35,6 @@ app = typer.Typer(
 console = Console()
 display = DisplayManager()
 process_handler = ProcessHandler()
-
-
-def setup_directories() -> None:
-    """Ensure all required directories exist."""
-    ensure_directories(
-        [VIDEO_PATH, AUDIO_PATH, VIDEO_FRAMES_PATH, TRANSCRIPTS_PATH, RESULTS_PATH]
-    )
-
-
-def initialize_logging(verbose: bool = False) -> None:
-    """Initialize logging system."""
-    setup_default_logging()
-
-
-def get_video_files(input_path: Path) -> list[Path]:
-    """
-    Get list of video files from a path.
-
-    Args:
-        input_path: Path to a video file or directory containing MP4 files
-
-    Returns:
-        List of video file paths
-
-    Raises:
-        ValueError: If path doesn't exist or no video files found
-    """
-    if not input_path.exists():
-        raise ValueError(f"Path not found: {input_path}")
-
-    if input_path.is_file():
-        if input_path.suffix.lower() == ".mp4":
-            return [input_path]
-        else:
-            raise ValueError(f"File must be MP4 format: {input_path}")
-    elif input_path.is_dir():
-        mp4_files = list(input_path.glob("*.mp4"))
-        if not mp4_files:
-            raise ValueError(f"No MP4 files found in directory: {input_path}")
-        return sorted(mp4_files)
-    else:
-        raise ValueError(f"Invalid path: {input_path}")
-
-
-# Function moved to DisplayManager class
 
 
 @app.command()
@@ -123,9 +79,11 @@ def process(
     """
 
     # Initialize logging
-    initialize_logging(verbose)
+    setup_default_logging()
 
-    setup_directories()
+    ensure_directories(
+        [VIDEO_PATH, AUDIO_PATH, VIDEO_FRAMES_PATH, TRANSCRIPTS_PATH, RESULTS_PATH]
+    )
 
     input_path_obj = Path(input_path)
 
@@ -189,20 +147,6 @@ def info(
         raise typer.Exit(1)
 
 
-def format_size(size_bytes: int) -> str:
-    """Format file size in human-readable format."""
-    if size_bytes == 0:
-        return "0B"
-
-    size_names = ["B", "KB", "MB", "GB", "TB"]
-    i = 0
-    size_value: float = float(size_bytes)
-    while size_value >= 1024 and i < len(size_names) - 1:
-        size_value /= 1024.0
-        i += 1
-
-    return f"{size_value:.1f}{size_names[i]}"
-
 
 @app.command()
 def setup() -> None:
@@ -217,7 +161,9 @@ def setup() -> None:
     ) as progress:
         # Setup directories
         setup_task = progress.add_task("📁 Setting up directories...", total=None)
-        setup_directories()
+        ensure_directories(
+            [VIDEO_PATH, AUDIO_PATH, VIDEO_FRAMES_PATH, TRANSCRIPTS_PATH, RESULTS_PATH]
+        )
         progress.update(setup_task, description="✅ Directories created")
         progress.remove_task(setup_task)
 

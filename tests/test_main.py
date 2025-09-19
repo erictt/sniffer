@@ -273,9 +273,9 @@ class TestUtilityFunctions:
 
     def test_format_size_function(self):
         """Test file size formatting function."""
-        from sniffer.main import format_size
+        from sniffer.utils.file import format_file_size
 
-        assert format_size(0) == "0B"
-        assert format_size(1024) == "1.0KB"
-        assert format_size(1048576) == "1.0MB"
-        assert format_size(1073741824) == "1.0GB"
+        assert format_file_size(0) == "0B"
+        assert format_file_size(1024) == "1.0KB"
+        assert format_file_size(1048576) == "1.0MB"
+        assert format_file_size(1073741824) == "1.0GB"

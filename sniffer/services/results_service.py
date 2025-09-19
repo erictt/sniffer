@@ -8,6 +8,7 @@ from typing import Any
 
 from ..utils.logging import get_logger
 from ..utils.directory import ensure_directory
+from ..utils.file import format_file_size
 from ..config.constants import RESULTS_PATH
 
 
@@ -51,7 +52,7 @@ class ResultsService:
         enhanced_video_info = {
             "video_file": video_file.name,
             "video_path": str(video_file),
-            "file_size": self._format_file_size(video_file.stat().st_size),
+            "file_size": format_file_size(video_file.stat().st_size),
         }
 
         # Add video metadata if available
@@ -108,19 +109,6 @@ class ResultsService:
 
         return datetime.now().isoformat()
 
-    def _format_file_size(self, size_bytes: int) -> str:
-        """Format file size in human-readable format."""
-        if size_bytes == 0:
-            return "0B"
-
-        size_names = ["B", "KB", "MB", "GB", "TB"]
-        i = 0
-        size_value: float = float(size_bytes)
-        while size_value >= 1024 and i < len(size_names) - 1:
-            size_value /= 1024.0
-            i += 1
-
-        return f"{size_value:.1f}{size_names[i]}"
 
     def _analyze_speech_patterns(self, words: list[dict]) -> dict[str, Any]:
         """Analyze speaking patterns and gaps in speech."""
