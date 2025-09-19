@@ -4,16 +4,15 @@ Video capture context manager for proper resource management.
 
 import cv2
 from pathlib import Path
-from typing import Optional
 from ..utils.logging import get_logger
 
 
 class VideoCapture:
     """Context manager for cv2.VideoCapture with proper resource cleanup."""
 
-    def __init__(self, video_path: str | Path):
+    def __init__(self, video_path: str | Path) -> None:
         self.video_path = str(video_path)
-        self.cap: Optional[cv2.VideoCapture] = None
+        self.cap: cv2.VideoCapture | None = None
         self.logger = get_logger("sniffer.services.video_capture")
 
     def __enter__(self) -> cv2.VideoCapture:

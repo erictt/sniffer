@@ -3,11 +3,11 @@ Video processing module for extracting audio and frames from video files.
 Supports both single file and batch processing of MP4 files.
 """
 
-from typing import Optional, TypedDict
 from pathlib import Path
 import moviepy as mp
 import cv2  # noqa: F401 - Required for tests to patch correctly
 
+from .types import ProcessResults
 from .config.constants import AUDIO_PATH, VIDEO_FRAMES_PATH
 from .utils.directory import ensure_directory
 from .utils.file import extract_filename_from_path
@@ -16,21 +16,12 @@ from .services import VideoMetadataService, FrameExtractionService
 from .services.frame_extraction import FrameExtractionConfig
 
 
-class ProcessResults(TypedDict, total=False):
-    """Type definition for VideoProcessor.process_all() results."""
-
-    processed_file: str
-    audio_path: str
-    all_frames: list[str]
-    position_frames: dict[int, str]
-
-
 class VideoProcessor:
     """
     A class for processing a single video file to extract audio and frames.
     """
 
-    def __init__(self, video_file: str | Path):
+    def __init__(self, video_file: str | Path) -> None:
         """
         Initialize VideoProcessor with a single video file.
 
@@ -123,7 +114,7 @@ class VideoProcessor:
         self,
         extract_audio: bool = True,
         extract_all_frames: bool = False,
-        frame_position: Optional[str] = "middle",
+        frame_position: str | None = "middle",
     ) -> ProcessResults:
         """
         Process the video with specified operations.

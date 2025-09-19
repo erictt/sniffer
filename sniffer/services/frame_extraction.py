@@ -2,7 +2,6 @@
 Frame extraction service for video processing.
 """
 
-from typing import Optional
 from pathlib import Path
 import cv2
 import random
@@ -20,12 +19,12 @@ class FrameExtractionConfig:
 
     def __init__(
         self,
-        video_path: Path,
-        position: Optional[str] = None,
+        video_path: str | Path,
+        position: str | None = None,
         extract_all: bool = False,
-        output_dir: Optional[str] = None,
-    ):
-        self.video_path = video_path
+        output_dir: str | None = None,
+    ) -> None:
+        self.video_path = Path(video_path)
         self.position = position
         self.extract_all = extract_all
         self.output_dir = output_dir or self._default_output_dir()
@@ -39,7 +38,7 @@ class FrameExtractionConfig:
 class FrameExtractionService:
     """Service for extracting frames from video files."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = get_logger("sniffer.services.frames")
         self.progress = ProgressLogger("sniffer.services.frames.progress")
 

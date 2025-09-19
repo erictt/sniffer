@@ -2,33 +2,19 @@
 Video metadata extraction service.
 """
 
-from typing import TypedDict
 from pathlib import Path
 import moviepy as mp
 import cv2
 
 from .video_capture import VideoCapture
+from ..types import VideoMetadata
 from ..utils.logging import get_logger
-
-
-class VideoMetadata(TypedDict):
-    """Type definition for video metadata."""
-
-    resolution: str
-    width: int
-    height: int
-    fps: float
-    frame_count: int
-    duration: float
-    duration_clip: float
-    codec: str
-    file_size: int
 
 
 class VideoMetadataService:
     """Service for extracting video metadata."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = get_logger("sniffer.services.metadata")
 
     def extract_metadata(self, video_path: Path) -> VideoMetadata | dict:

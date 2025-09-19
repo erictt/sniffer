@@ -2,13 +2,15 @@
 Audio transcription module using OpenAI's Whisper API for precise word-level timestamps.
 """
 
-from typing import Optional
+from typing import Literal
 from pathlib import Path
 import json
 
 from openai import OpenAI
+from .types import WordTimestamp, SegmentData, FrameSyncData
 from .utils.logging import get_logger, ProgressLogger
-from .config.constants import OPENAI_API_KEY
+from .config.constants import OPENAI_API_KEY, TRANSCRIPTS_PATH
+from .utils.directory import ensure_directory
 
 
 class AudioTranscriber:
@@ -17,7 +19,7 @@ class AudioTranscriber:
     Provides word-level timestamps for precise audio-text alignment.
     """
 
-    def __init__(self, audio_file: str | Path, api_key: Optional[str] = None):
+    def __init__(self, audio_file: str | Path, api_key: str | None = None) -> None:
         """
         Initialize AudioTranscriber with a single audio file and OpenAI API key.
 
@@ -44,7 +46,7 @@ class AudioTranscriber:
         response_format: str = "verbose_json",
         timestamp_granularities: list[str] | None = None,
         save_transcript: bool = True,
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
     ) -> dict:
         """
         Transcribe the audio file with word-level timestamps.
@@ -67,14 +69,12 @@ class AudioTranscriber:
             with open(self.audio_file, "rb") as audio_file:
                 # Use verbose_json format when timestamp_granularities are provided
                 if timestamp_granularities and response_format == "verbose_json":
-                    from typing import Literal
-
                     # Ensure timestamp_granularities contains only valid values
                     valid_granularities: list[Literal["word", "segment"]] = []
-                    for g in timestamp_granularities:
-                        if g == "word":
+                    for granularity in timestamp_granularities:
+                        if granularity == "word":
                             valid_granularities.append("word")
-                        elif g == "segment":
+                        elif granularity == "segment":
                             valid_granularities.append("segment")
 
                     transcript_verbose = self.client.audio.transcriptions.create(
@@ -103,9 +103,6 @@ class AudioTranscriber:
 
             # Save transcript if requested
             if save_transcript:
-                from .config.constants import TRANSCRIPTS_PATH
-                from .utils.directory import ensure_directory
-
                 if output_dir is None:
                     output_dir = TRANSCRIPTS_PATH
 
@@ -125,9 +122,7 @@ class AudioTranscriber:
             self.logger.error(f"Transcription failed for {self.audio_file.name}: {e}")
             raise
 
-    def extract_word_timestamps(
-        self, transcript: dict
-    ) -> list[dict[str, str | float | int]]:
+    def extract_word_timestamps(self, transcript: dict) -> list[WordTimestamp]:
         """
         Extract and enhance word-level timestamps with second bucket assignment.
 
@@ -140,7 +135,7 @@ class AudioTranscriber:
         Returns:
             List of dictionaries with word, start, end times, and assigned second
         """
-        words_with_timestamps = []
+        words_with_timestamps: list[WordTimestamp] = []
 
         if "words" in transcript:
             for word_info in transcript["words"]:
@@ -151,17 +146,17 @@ class AudioTranscriber:
                 assigned_second = int(start_time)
 
                 words_with_timestamps.append(
-                    {
-                        "word": word_info.get("word", ""),
-                        "start": start_time,
-                        "end": end_time,
-                        "second": assigned_second,
-                    }
+                    WordTimestamp(
+                        word=word_info.get("word", ""),
+                        start=start_time,
+                        end=end_time,
+                        second=assigned_second,
+                    )
                 )
 
         return words_with_timestamps
 
-    def extract_segments(self, transcript: dict) -> list[dict[str, str | float]]:
+    def extract_segments(self, transcript: dict) -> list[SegmentData]:
         """
         Extract segment-level information from transcript.
 
@@ -171,24 +166,24 @@ class AudioTranscriber:
         Returns:
             List of dictionaries with segment text, start, and end times
         """
-        segments = []
+        segments: list[SegmentData] = []
 
         if "segments" in transcript:
             for segment in transcript["segments"]:
                 segments.append(
-                    {
-                        "text": segment.get("text", ""),
-                        "start": segment.get("start", 0.0),
-                        "end": segment.get("end", 0.0),
-                        "words": segment.get("words", []),
-                    }
+                    SegmentData(
+                        text=segment.get("text", ""),
+                        start=segment.get("start", 0.0),
+                        end=segment.get("end", 0.0),
+                        words=segment.get("words", []),
+                    )
                 )
 
         return segments
 
     def get_text_at_timestamp(
         self, transcript: dict, timestamp: float, tolerance: float = 0.1
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Get the word/text that was spoken at a specific timestamp.
 
@@ -214,7 +209,7 @@ class AudioTranscriber:
 
     def synchronize_with_frames(
         self, transcript: dict, frame_timestamps: list[float]
-    ) -> list[dict]:
+    ) -> list[FrameSyncData]:
         """
         Synchronize transcript words with frame timestamps.
 
@@ -225,17 +220,17 @@ class AudioTranscriber:
         Returns:
             List of dictionaries mapping frame timestamps to spoken words
         """
-        synchronized_data = []
+        synchronized_data: list[FrameSyncData] = []
 
         for frame_time in frame_timestamps:
             spoken_word = self.get_text_at_timestamp(transcript, frame_time)
 
             synchronized_data.append(
-                {
-                    "frame_timestamp": frame_time,
-                    "spoken_word": spoken_word,
-                    "has_speech": spoken_word is not None,
-                }
+                FrameSyncData(
+                    frame_timestamp=frame_time,
+                    spoken_word=spoken_word,
+                    has_speech=spoken_word is not None,
+                )
             )
 
         return synchronized_data

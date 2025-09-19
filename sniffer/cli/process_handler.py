@@ -7,7 +7,8 @@ from pathlib import Path
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.console import Console
 
-from ..video_processor import VideoProcessor, ProcessResults
+from ..types import ProcessResults
+from ..video_processor import VideoProcessor
 from ..transcription import AudioTranscriber
 from ..services import SyncService, ResultsService
 
@@ -15,7 +16,7 @@ from ..services import SyncService, ResultsService
 class ProcessHandler:
     """Handles the main video processing workflow."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.sync_service = SyncService()
         self.results_service = ResultsService()
 

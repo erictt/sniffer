@@ -7,13 +7,13 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from ..video_processor import ProcessResults
+from ..types import ProcessResults
 
 
 class DisplayManager:
     """Manages rich console display output."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.console = Console()
 
     def show_processing_config(
